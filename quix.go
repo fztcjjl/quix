@@ -21,10 +21,11 @@ const shutdownTimeout = 5 * time.Second
 
 // App is the core framework application.
 type App struct {
-	httpServer *qhttp.Server
-	rpcServer  transport.Server
-	logger     log.Logger
-	config     config.Config
+	httpServer        *qhttp.Server
+	rpcServer         transport.Server
+	logger            log.Logger
+	config            config.Config
+	defaultMiddleware bool
 }
 
 // resolveHttpAddr reads the HTTP server address from config.

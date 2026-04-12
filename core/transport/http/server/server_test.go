@@ -120,3 +120,36 @@ func TestServerAllMethods(t *testing.T) {
 		}
 	}
 }
+
+func TestServerDefaultMiddleware(t *testing.T) {
+	s := NewServer()
+
+	// Default middleware should recover from panic
+	s.GET("/panic", func(c *gin.Context) {
+		panic("test panic")
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/panic", nil)
+	s.Engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500 (recovered), got %d", w.Code)
+	}
+}
+
+func TestServerDisableDefaultMiddleware(t *testing.T) {
+	s := NewServer(WithDefaultMiddleware(false))
+
+	s.GET("/ok", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/ok", nil)
+	s.Engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}

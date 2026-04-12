@@ -114,3 +114,18 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 #### Scenario: Example is runnable
 - **WHEN** 执行 `go run examples/http/main.go`
 - **THEN** MUST 启动 HTTP 服务，可通过 curl 访问
+
+### Requirement: HTTP Server default middleware
+HTTP Server 创建时 SHALL 默认挂载 Recovery 和 RequestID 中间件，可通过 Option 关闭。
+
+#### Scenario: Default middleware mounted
+- **WHEN** 创建 HTTP Server 且未传入 `server.WithDefaultMiddleware(false)`
+- **THEN** MUST 在 Engine 上挂载 Recovery 和 RequestID 中间件
+
+#### Scenario: Disable default middleware
+- **WHEN** 创建 HTTP Server 时传入 `server.WithDefaultMiddleware(false)`
+- **THEN** MUST 不挂载任何默认中间件
+
+#### Scenario: Default middleware recovers panic
+- **WHEN** 使用默认中间件的 Server 处理请求时 handler 发生 panic
+- **THEN** MUST 返回 HTTP 500，服务不崩溃

@@ -45,3 +45,10 @@ func WithGinMode(mode string) Option {
 		gin.SetMode(mode)
 	}
 }
+
+// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID) is mounted.
+func WithDefaultMiddleware(enabled bool) Option {
+	return func(a *App) {
+		a.defaultMiddleware = enabled
+	}
+}

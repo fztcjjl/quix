@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"github.com/fztcjjl/quix/core/transport"
+	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
+	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,7 +22,8 @@ type Server struct {
 type Option func(*options)
 
 type options struct {
-	addr string
+	addr              string
+	defaultMiddleware bool
 }
 
 // WithAddr sets the server listen address.
@@ -30,20 +33,33 @@ func WithAddr(addr string) Option {
 	}
 }
 
+// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID) is mounted.
+func WithDefaultMiddleware(enabled bool) Option {
+	return func(o *options) {
+		o.defaultMiddleware = enabled
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
-	o := &options{}
+	o := &options{defaultMiddleware: true}
 	for _, opt := range opts {
 		opt(o)
 	}
 
 	engine := gin.New()
 
-	return &Server{
+	s := &Server{
 		Engine: engine,
 		addr:   o.addr,
 		server: &http.Server{Addr: o.addr, Handler: engine, ReadHeaderTimeout: 5 * time.Second},
 	}
+
+	if o.defaultMiddleware {
+		engine.Use(middleware.Recovery(), requestid.New())
+	}
+
+	return s
 }
 
 // Addr returns the server listen address.
