@@ -1,0 +1,38 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/quix
+
+# Test
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# Vendor (optional, uncomment if not committing vendor)
+# vendor/
+
+# Go workspace
+go.work
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+/dist
+/tmp
+
+# Claude Code
+.claude/
+!.claude/projects/

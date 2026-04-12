@@ -1,0 +1,30 @@
+run:
+  timeout: 3m
+
+linters:
+  enable:
+    - errcheck        # 未处理的 error 返回值
+    - govet           # go vet 官方检查
+    - staticcheck     # 高级静态分析
+    - unused          # 未使用的变量/函数/类型
+    - gosimple        # 可简化的代码建议
+    - ineffassign     # 无效赋值检测
+    - gosec           # 安全漏洞检查
+    - gofmt           # 格式化检查
+    - goimports       # import 排序检查
+    - misspell        # 拼写检查
+    - gocritic        # 代码风格建议
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - fmt.Fprintf
+      - fmt.Fprintln
+
+issues:
+  exclude-rules:
+    # 示例代码放宽检查
+    - path: examples/
+      linters:
+        - errcheck
+        - gosec
