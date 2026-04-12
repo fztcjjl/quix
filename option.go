@@ -3,6 +3,9 @@ package quix
 import (
 	"github.com/fztcjjl/quix/core/config"
 	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/transport"
+	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
+	"github.com/gin-gonic/gin"
 )
 
 // Option configures the App during creation.
@@ -19,5 +22,26 @@ func WithLogger(l logger.Logger) Option {
 func WithConfig(c config.Config) Option {
 	return func(a *App) {
 		a.config = c
+	}
+}
+
+// WithHttpServer sets a custom HTTP server for the App.
+func WithHttpServer(s *qhttp.Server) Option {
+	return func(a *App) {
+		a.httpServer = s
+	}
+}
+
+// WithRpcServer sets a custom RPC server for the App.
+func WithRpcServer(s transport.Server) Option {
+	return func(a *App) {
+		a.rpcServer = s
+	}
+}
+
+// WithGinMode sets the Gin mode (debug, release, test).
+func WithGinMode(mode string) Option {
+	return func(a *App) {
+		gin.SetMode(mode)
 	}
 }
