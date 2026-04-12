@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"context"
@@ -31,5 +31,53 @@ func TestMockLoggerSatisfiesInterface(t *testing.T) {
 	child := l.With("key", "value")
 	if child == nil {
 		t.Fatal("With() returned nil")
+	}
+}
+
+func TestNoopLoggerDoesNotPanic(t *testing.T) {
+	n := &noopLogger{}
+	ctx := context.Background()
+
+	n.Info(ctx, "info")
+	n.Error(ctx, "error")
+	n.Warn(ctx, "warn")
+	n.Debug(ctx, "debug")
+
+	child := n.With("key", "value")
+	if child == nil {
+		t.Fatal("noopLogger.With() returned nil")
+	}
+}
+
+func TestSetDefault(t *testing.T) {
+	// Save and restore original
+	orig := defaultLogger
+	defer func() { defaultLogger = orig }()
+
+	custom := &mockLogger{}
+	SetDefault(custom)
+
+	if defaultLogger != custom {
+		t.Fatal("SetDefault did not update defaultLogger")
+	}
+}
+
+func TestPackageLevelFunctions(t *testing.T) {
+	// Save and restore original
+	orig := defaultLogger
+	defer func() { defaultLogger = orig }()
+
+	// Use noopLogger — should not panic
+	SetDefault(&noopLogger{})
+	ctx := context.Background()
+
+	Info(ctx, "info msg")
+	Error(ctx, "error msg")
+	Warn(ctx, "warn msg")
+	Debug(ctx, "debug msg")
+
+	child := With("key", "value")
+	if child == nil {
+		t.Fatal("global With() returned nil")
 	}
 }

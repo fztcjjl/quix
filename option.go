@@ -2,7 +2,7 @@ package quix
 
 import (
 	"github.com/fztcjjl/quix/core/config"
-	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/log"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
@@ -12,7 +12,7 @@ import (
 type Option func(*App)
 
 // WithLogger sets a custom Logger implementation for the App.
-func WithLogger(l logger.Logger) Option {
+func WithLogger(l log.Logger) Option {
 	return func(a *App) {
 		a.logger = l
 	}

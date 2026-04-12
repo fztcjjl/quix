@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/log"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
 )
@@ -127,7 +127,7 @@ func (m *mockLogger) Info(ctx context.Context, msg string, args ...any)  {}
 func (m *mockLogger) Error(ctx context.Context, msg string, args ...any) {}
 func (m *mockLogger) Warn(ctx context.Context, msg string, args ...any)  {}
 func (m *mockLogger) Debug(ctx context.Context, msg string, args ...any) {}
-func (m *mockLogger) With(args ...any) logger.Logger                     { return m }
+func (m *mockLogger) With(args ...any) log.Logger                        { return m }
 
 type mockTransportServer struct{}
 

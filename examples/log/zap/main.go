@@ -3,21 +3,17 @@ package main
 import (
 	"context"
 
-	quix "github.com/fztcjjl/quix"
-	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/log"
 	"go.uber.org/zap"
 )
 
 func main() {
-	// 使用 zap 作为日志实现
+	ctx := context.Background()
+
+	// 使用 zap 替换全局默认
 	rawLog, _ := zap.NewProduction()
 	defer rawLog.Sync()
-	sl := rawLog.Sugar()
-
-	app := quix.New(quix.WithLogger(logger.NewZap(sl)))
-	log := app.Logger()
-
-	ctx := context.Background()
+	log.SetDefault(log.NewZap(rawLog.Sugar()))
 
 	log.Info(ctx, "使用 Zap logger")
 	log.Info(ctx, "带字段的日志", "method", "GET", "path", "/users")

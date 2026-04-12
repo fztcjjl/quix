@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/fztcjjl/quix/core/config"
-	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/log"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
@@ -23,7 +23,7 @@ const shutdownTimeout = 5 * time.Second
 type App struct {
 	httpServer *qhttp.Server
 	rpcServer  transport.Server
-	logger     logger.Logger
+	logger     log.Logger
 	config     config.Config
 }
 
@@ -44,12 +44,13 @@ func resolveHttpAddr(c config.Config) string {
 // If no logger is provided, zerolog is used by default.
 // If no config is provided, koanf with environment variables is used by default.
 func New(opts ...Option) *App {
-	defaultLog := logger.NewZerolog(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger())
+	defaultLog := log.NewZerolog(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger())
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
 		logger: defaultLog,
 		config: defaultCfg,
 	}
+	log.SetDefault(defaultLog)
 	for _, opt := range opts {
 		opt(app)
 	}
@@ -69,7 +70,7 @@ func New(opts ...Option) *App {
 }
 
 // Logger returns the App's logger.
-func (a *App) Logger() logger.Logger {
+func (a *App) Logger() log.Logger {
 	return a.logger
 }
 

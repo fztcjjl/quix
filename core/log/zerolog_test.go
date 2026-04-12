@@ -1,4 +1,4 @@
-package logger
+package log
 
 import (
 	"bytes"
@@ -6,27 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"github.com/rs/zerolog"
 )
 
-func newTestZapLogger() (*zap.SugaredLogger, *bytes.Buffer) {
+func newTestZerologLogger() (zerolog.Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
-	encoderCfg := zapcore.EncoderConfig{
-		MessageKey:  "msg",
-		LevelKey:    "level",
-		TimeKey:     "ts",
-		EncodeLevel: zapcore.CapitalLevelEncoder,
-		EncodeTime:  zapcore.ISO8601TimeEncoder,
-	}
-	core := zapcore.NewCore(zapcore.NewJSONEncoder(encoderCfg), zapcore.AddSync(&buf), zapcore.DebugLevel)
-	sl := zap.New(core).Sugar()
-	return sl, &buf
+	l := zerolog.New(&buf).With().Timestamp().Logger()
+	return l, &buf
 }
 
-func TestZapLogLevels(t *testing.T) {
-	sl, buf := newTestZapLogger()
-	zl := NewZap(sl)
+func TestZerologLogLevels(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
 	ctx := context.Background()
 
 	tests := []struct {
@@ -34,10 +25,10 @@ func TestZapLogLevels(t *testing.T) {
 		level string
 		call  func()
 	}{
-		{"info", "INFO", func() { zl.Info(ctx, "info msg") }},
-		{"error", "ERROR", func() { zl.Error(ctx, "error msg") }},
-		{"warn", "WARN", func() { zl.Warn(ctx, "warn msg") }},
-		{"debug", "DEBUG", func() { zl.Debug(ctx, "debug msg") }},
+		{"info", "info", func() { zl.Info(ctx, "info msg") }},
+		{"error", "error", func() { zl.Error(ctx, "error msg") }},
+		{"warn", "warn", func() { zl.Warn(ctx, "warn msg") }},
+		{"debug", "debug", func() { zl.Debug(ctx, "debug msg") }},
 	}
 
 	for _, tt := range tests {
@@ -51,9 +42,9 @@ func TestZapLogLevels(t *testing.T) {
 	}
 }
 
-func TestZapWithFields(t *testing.T) {
-	sl, buf := newTestZapLogger()
-	zl := NewZap(sl)
+func TestZerologWithFields(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
 	ctx := context.Background()
 
 	zl.Info(ctx, "test", "method", "GET", "path", "/users")
@@ -63,9 +54,9 @@ func TestZapWithFields(t *testing.T) {
 	}
 }
 
-func TestZapWithReturnsNewLogger(t *testing.T) {
-	sl, buf := newTestZapLogger()
-	zl := NewZap(sl)
+func TestZerologWithReturnsNewLogger(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
 	ctx := context.Background()
 
 	zl2 := zl.With("service", "quix")
@@ -80,9 +71,9 @@ func TestZapWithReturnsNewLogger(t *testing.T) {
 	}
 }
 
-func TestZapOddArgsDropped(t *testing.T) {
-	sl, _ := newTestZapLogger()
-	zl := NewZap(sl)
+func TestZerologOddArgsDropped(t *testing.T) {
+	l, _ := newTestZerologLogger()
+	zl := NewZerolog(l)
 	ctx := context.Background()
 
 	// 3 args: odd trailing should be dropped, no panic

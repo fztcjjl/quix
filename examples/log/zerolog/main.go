@@ -4,20 +4,17 @@ import (
 	"context"
 	"os"
 
-	quix "github.com/fztcjjl/quix"
-	"github.com/fztcjjl/quix/core/logger"
+	"github.com/fztcjjl/quix/core/log"
 	"github.com/rs/zerolog"
 )
 
 func main() {
-	// 使用 zerolog 作为日志实现
+	ctx := context.Background()
+
+	// 使用 zerolog 替换全局默认
 	l := zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).
 		With().Timestamp().Logger()
-
-	app := quix.New(quix.WithLogger(logger.NewZerolog(l)))
-	log := app.Logger()
-
-	ctx := context.Background()
+	log.SetDefault(log.NewZerolog(l))
 
 	log.Info(ctx, "使用 Zerolog logger")
 	log.Info(ctx, "带字段的日志", "method", "GET", "path", "/users")
