@@ -30,6 +30,26 @@ func TestWithLoggerCompileCheck(t *testing.T) {
 	var _ Option = WithLogger(&mockLogger{})
 }
 
+func TestWithConfigInject(t *testing.T) {
+	custom := &mockConfig{}
+	app := New(WithConfig(custom))
+	if app.Config() != custom {
+		t.Fatal("WithConfig did not inject the custom config")
+	}
+}
+
+func TestWithConfigCompileCheck(t *testing.T) {
+	var _ Option = WithConfig(&mockConfig{})
+}
+
+type mockConfig struct{}
+
+func (m *mockConfig) Get(key string) any                { return nil }
+func (m *mockConfig) String(key string) string          { return "" }
+func (m *mockConfig) Int(key string) int                { return 0 }
+func (m *mockConfig) Bool(key string) bool              { return false }
+func (m *mockConfig) Bind(key string, target any) error { return nil }
+
 type mockLogger struct{}
 
 func (m *mockLogger) Info(ctx context.Context, msg string, args ...any)  {}

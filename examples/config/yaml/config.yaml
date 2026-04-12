@@ -1,0 +1,12 @@
+server:
+  host: localhost
+  port: 8080
+
+app:
+  name: quix-demo
+  debug: true
+
+database:
+  host: 127.0.0.1
+  port: 5432
+  name: mydb

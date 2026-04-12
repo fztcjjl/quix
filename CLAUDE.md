@@ -44,6 +44,8 @@ quix/
 - **Option 模式**: App 配置使用 `func(*App)` 选项函数 — `quix.New(quix.WithLogger(...))`。默认实现零配置
 - **Key-value 日志**: Logger 使用 `Info(ctx, "msg", "key", val)` 键值对交替风格（与 slog 一致）
 - **示例必须**: 每个组件必须在 `examples/<component>/` 下提供可运行的示例代码
+- **写完代码必须格式化**: 每次 Write/Edit Go 文件后，必须执行 `go fmt ./...`
+- **完成一组任务后必须 lint**: 每完成一个任务组（如接口定义、实现、测试），必须执行 `golangci-lint run ./...`
 
 ## 技术栈
 
