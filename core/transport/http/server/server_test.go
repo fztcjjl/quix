@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -151,5 +154,63 @@ func TestServerDisableDefaultMiddleware(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
+	}
+}
+
+func TestServerDefaultMiddlewareErrorFormat(t *testing.T) {
+	s := NewServer()
+
+	s.GET("/notfound", Handler(func(c *gin.Context) error {
+		return errors.NotFound("user_not_found", "用户不存在")
+	}))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/notfound", nil)
+	s.Engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	errObj, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatal("response should contain 'error' object")
+	}
+	if errObj["code"] != "user_not_found" {
+		t.Errorf("error.code = %v, want %q", errObj["code"], "user_not_found")
+	}
+}
+
+func TestServerDefaultMiddlewareStandardError(t *testing.T) {
+	s := NewServer()
+
+	s.GET("/internal", Handler(func(c *gin.Context) error {
+		return fmt.Errorf("unexpected error")
+	}))
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/internal", nil)
+	s.Engine.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d", w.Code)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	errObj, ok := body["error"].(map[string]any)
+	if !ok {
+		t.Fatal("response should contain 'error' object")
+	}
+	if errObj["code"] != "internal_error" {
+		t.Errorf("error.code = %v, want %q", errObj["code"], "internal_error")
 	}
 }

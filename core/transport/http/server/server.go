@@ -33,7 +33,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID) is mounted.
+// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID, ResponseMiddleware) is mounted.
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(o *options) {
 		o.defaultMiddleware = enabled
@@ -56,7 +56,7 @@ func NewServer(opts ...Option) *Server {
 	}
 
 	if o.defaultMiddleware {
-		engine.Use(middleware.Recovery(), requestid.New())
+		engine.Use(middleware.Recovery(), requestid.New(), middleware.ResponseMiddleware())
 	}
 
 	return s

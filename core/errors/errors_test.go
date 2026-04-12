@@ -1,0 +1,108 @@
+package errors_test
+
+import (
+	"encoding/json"
+	"errors"
+	"testing"
+
+	apperrors "github.com/fztcjjl/quix/core/errors"
+)
+
+func TestErrorImplementsErrorInterface(t *testing.T) {
+	e := &apperrors.Error{Code: "test", Message: "test message"}
+	var _ error = e
+
+	if e.Error() != "test message" {
+		t.Errorf("Error() = %q, want %q", e.Error(), "test message")
+	}
+}
+
+func TestErrorJSONSerialization(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      *apperrors.Error
+		wantJSON string
+	}{
+		{
+			name:     "full error with details",
+			err:      &apperrors.Error{Code: "param_invalid", Message: "参数验证失败", Details: "field: name", StatusCode: 400},
+			wantJSON: `{"code":"param_invalid","message":"参数验证失败","details":"field: name"}`,
+		},
+		{
+			name:     "error without details",
+			err:      &apperrors.Error{Code: "not_found", Message: "不存在", StatusCode: 404},
+			wantJSON: `{"code":"not_found","message":"不存在"}`,
+		},
+		{
+			name:     "error with map details",
+			err:      &apperrors.Error{Code: "validation", Message: "验证失败", Details: map[string]string{"field": "email", "reason": "invalid format"}, StatusCode: 400},
+			wantJSON: `{"code":"validation","message":"验证失败","details":{"field":"email","reason":"invalid format"}}`,
+		},
+		{
+			name:     "error with slice details",
+			err:      &apperrors.Error{Code: "batch_error", Message: "批量操作部分失败", Details: []map[string]any{{"id": 1, "error": "not found"}, {"id": 2, "error": "forbidden"}}, StatusCode: 207},
+			wantJSON: `{"code":"batch_error","message":"批量操作部分失败","details":[{"error":"not found","id":1},{"error":"forbidden","id":2}]}`,
+		},
+		{
+			name:     "status code not in JSON",
+			err:      &apperrors.Error{Code: "internal", Message: "内部错误", StatusCode: 500},
+			wantJSON: `{"code":"internal","message":"内部错误"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.err)
+			if err != nil {
+				t.Fatalf("json.Marshal() error = %v", err)
+			}
+			if string(data) != tt.wantJSON {
+				t.Errorf("json.Marshal() = %s, want %s", string(data), tt.wantJSON)
+			}
+		})
+	}
+}
+
+func TestErrorDetailsIsOptional(t *testing.T) {
+	e := &apperrors.Error{Code: "test", Message: "test", StatusCode: 400}
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+	if string(data) != `{"code":"test","message":"test"}` {
+		t.Errorf("json.Marshal() with nil details = %s, want details omitted", string(data))
+	}
+}
+
+func TestErrorWithCustomStructDetails(t *testing.T) {
+	type FieldError struct {
+		Field   string `json:"field"`
+		Message string `json:"message"`
+	}
+
+	e := &apperrors.Error{
+		Code:       "validation",
+		Message:    "验证失败",
+		Details:    []FieldError{{Field: "email", Message: "格式无效"}, {Field: "age", Message: "必须大于0"}},
+		StatusCode: 400,
+	}
+
+	data, err := json.Marshal(e)
+	if err != nil {
+		t.Fatalf("json.Marshal() error = %v", err)
+	}
+
+	want := `{"code":"validation","message":"验证失败","details":[{"field":"email","message":"格式无效"},{"field":"age","message":"必须大于0"}]}`
+	if string(data) != want {
+		t.Errorf("json.Marshal() = %s, want %s", string(data), want)
+	}
+}
+
+func TestErrorIsComparableWithErrorsIs(t *testing.T) {
+	e := &apperrors.Error{Code: "test", Message: "test"}
+	var _ error = e
+
+	if !errors.Is(e, e) {
+		t.Error("errors.Is should return true for same pointer")
+	}
+}
