@@ -10,6 +10,11 @@ import (
 
 var pathsSourceRelative bool
 
+// ParamFunc is the primary way protogen parses parameters. However, some
+// environments (e.g., certain buf or protoc versions) pass parameters as a
+// raw string without invoking ParamFunc. The fallback in Run() ensures
+// paths=source_relative is always detected.
+
 func main() {
 	protogen.Options{
 		ParamFunc: func(name, value string) error {

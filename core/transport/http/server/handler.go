@@ -1,10 +1,6 @@
 package server
 
 import (
-	"errors"
-	"net/http"
-
-	apperrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,18 +11,7 @@ import (
 func Handler(fn func(c *gin.Context) error) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if err := fn(c); err != nil {
-			var appErr *apperrors.Error
-			if errors.As(err, &appErr) {
-				c.Set("app_error", appErr)
-				c.AbortWithStatus(appErr.StatusCode)
-			} else {
-				c.Set("app_error", &apperrors.Error{
-					Code:       "internal_error",
-					Message:    err.Error(),
-					StatusCode: http.StatusInternalServerError,
-				})
-				c.AbortWithStatus(http.StatusInternalServerError)
-			}
+			SetAppError(c, err)
 		}
 	}
 }

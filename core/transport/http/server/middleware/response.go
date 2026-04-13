@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net/http"
+
 	apperrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
@@ -12,10 +14,13 @@ func ResponseMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 		if raw, exists := c.Get("app_error"); exists {
-			err := raw.(*apperrors.Error)
-			c.JSON(err.StatusCode, gin.H{
-				"error": err,
-			})
+			if appErr, ok := raw.(*apperrors.Error); ok {
+				c.JSON(appErr.StatusCode, gin.H{
+					"error": appErr,
+				})
+			} else {
+				c.String(http.StatusInternalServerError, "internal error")
+			}
 		}
 	}
 }

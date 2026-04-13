@@ -18,8 +18,7 @@ type GreeterHTTPService interface {
 
 // RegisterGreeterHTTPService registers HTTP handlers for Greeter onto the given router group.
 func RegisterGreeterHTTPService(g *gin.RouterGroup, svc GreeterHTTPService) {
-	r := g.Group("")
-	r.GET("/hello/:name", _Greeter_SayHello0_HTTP_Handler(svc))
+	g.GET("/hello/:name", _Greeter_SayHello0_HTTP_Handler(svc))
 }
 
 func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
@@ -46,7 +45,7 @@ func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)

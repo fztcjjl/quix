@@ -22,13 +22,12 @@ type GreeterHTTPService interface {
 
 // RegisterGreeterHTTPService registers HTTP handlers for Greeter onto the given router group.
 func RegisterGreeterHTTPService(g *gin.RouterGroup, svc GreeterHTTPService) {
-	r := g.Group("")
-	r.GET("/hello/:name", _Greeter_SayHello0_HTTP_Handler(svc))
-	r.POST("/users", _Greeter_CreateUser0_HTTP_Handler(svc))
-	r.PUT("/users/:user_id", _Greeter_UpdateUser0_HTTP_Handler(svc))
-	r.DELETE("/users/:user_id", _Greeter_DeleteUser0_HTTP_Handler(svc))
-	r.GET("/users/search", _Greeter_SearchUsers0_HTTP_Handler(svc))
-	r.POST("/users/search", _Greeter_SearchUsers1_HTTP_Handler(svc))
+	g.GET("/hello/:name", _Greeter_SayHello0_HTTP_Handler(svc))
+	g.POST("/users", _Greeter_CreateUser0_HTTP_Handler(svc))
+	g.PUT("/users/:user_id", _Greeter_UpdateUser0_HTTP_Handler(svc))
+	g.DELETE("/users/:user_id", _Greeter_DeleteUser0_HTTP_Handler(svc))
+	g.GET("/users/search", _Greeter_SearchUsers0_HTTP_Handler(svc))
+	g.POST("/users/search", _Greeter_SearchUsers1_HTTP_Handler(svc))
 }
 
 func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
@@ -55,7 +54,7 @@ func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)
@@ -84,7 +83,7 @@ func _Greeter_CreateUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)
@@ -120,7 +119,7 @@ func _Greeter_UpdateUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)
@@ -179,7 +178,7 @@ func _Greeter_SearchUsers0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc 
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)
@@ -208,7 +207,7 @@ func _Greeter_SearchUsers1_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc 
 			c.SetError(err)
 			return
 		}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)

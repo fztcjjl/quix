@@ -2,12 +2,13 @@ package main
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"google.golang.org/genproto/googleapis/api/annotations"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 func generateFile(plugin *protogen.Plugin, file *protogen.File) {
@@ -62,6 +63,22 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 			// Extract all bindings (primary + additional)
 			bindings := extractAllBindings(rule)
 			for i, binding := range bindings {
+				// Validate body field exists on the input message
+				if binding.Body != "" && binding.Body != "*" {
+					found := false
+					for _, field := range method.Input.Fields {
+						if field.Desc.Name() == protoreflect.Name(binding.Body) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						plugin.Error(fmt.Errorf("method %s.%s: body field %q not found in %s",
+							svc.GoName, method.GoName, binding.Body, method.Input.GoIdent.GoName))
+						return
+					}
+				}
+
 				route := RouteData{
 					Method:      binding.Method,
 					Path:        ConvertPath(binding.Path),
@@ -83,10 +100,11 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 		return
 	}
 
-	// Collect extra imports
+	// Collect extra imports (sorted for deterministic output)
 	for imp := range extraImports {
 		data.ExtraImports = append(data.ExtraImports, imp)
 	}
+	slices.Sort(data.ExtraImports)
 
 	filename := genFilename(file, "_gin.go")
 
@@ -150,6 +168,3 @@ func httpRuleToBinding(rule *annotations.HttpRule) httpBinding {
 
 	return b
 }
-
-// init is used to ensure emptypb is available (referenced by type check).
-var _ = emptypb.Empty{}

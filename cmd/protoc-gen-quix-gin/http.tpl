@@ -24,10 +24,9 @@ type {{$svc.InterfaceName}} interface {
 
 // {{$svc.RegisterFuncName}} registers HTTP handlers for {{$svc.GoName}} onto the given router group.
 func {{$svc.RegisterFuncName}}(g *gin.RouterGroup, svc {{$svc.InterfaceName}}) {
-	r := g.Group("")
 	{{- range $method := $svc.Methods}}
 	{{- range $mi, $route := $method.Routes}}
-	r.{{$route.Method}}("{{$route.Path}}", _{{$svc.GoName}}_{{$method.GoName}}{{$mi}}_HTTP_Handler(svc))
+	g.{{$route.Method}}("{{$route.Path}}", _{{$svc.GoName}}_{{$method.GoName}}{{$mi}}_HTTP_Handler(svc))
 	{{- end}}
 	{{- end}}
 }
@@ -84,7 +83,7 @@ func _{{$svc.GoName}}_{{$method.GoName}}{{$ri}}_HTTP_Handler(svc {{$svc.Interfac
 			return
 		}
 		{{- if not $method.IsVoidReturn}}
-		if c.ContentType() == "application/x-protobuf" {
+		if c.GetHeader("Accept") == "application/x-protobuf" {
 			c.ProtoBuf(http.StatusOK, rsp)
 		} else {
 			c.JSON(http.StatusOK, rsp)

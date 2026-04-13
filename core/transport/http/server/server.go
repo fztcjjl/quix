@@ -24,6 +24,7 @@ type Option func(*options)
 type options struct {
 	addr              string
 	defaultMiddleware bool
+	readHeaderTimeout time.Duration
 }
 
 // WithAddr sets the server listen address.
@@ -40,9 +41,19 @@ func WithDefaultMiddleware(enabled bool) Option {
 	}
 }
 
+// WithReadHeaderTimeout sets the server ReadHeaderTimeout.
+func WithReadHeaderTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.readHeaderTimeout = d
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
-	o := &options{defaultMiddleware: true}
+	o := &options{
+		defaultMiddleware: true,
+		readHeaderTimeout: 5 * time.Second,
+	}
 	for _, opt := range opts {
 		opt(o)
 	}
@@ -52,7 +63,7 @@ func NewServer(opts ...Option) *Server {
 	s := &Server{
 		Engine: engine,
 		addr:   o.addr,
-		server: &http.Server{Addr: o.addr, Handler: engine, ReadHeaderTimeout: 5 * time.Second},
+		server: &http.Server{Addr: o.addr, Handler: engine, ReadHeaderTimeout: o.readHeaderTimeout},
 	}
 
 	if o.defaultMiddleware {

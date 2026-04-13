@@ -1,10 +1,8 @@
 package runtime
 
 import (
-	"errors"
-	"net/http"
-
 	apperrors "github.com/fztcjjl/quix/core/errors"
+	"github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
 )
 
@@ -15,22 +13,9 @@ type Context struct {
 }
 
 // SetError stores an error in the gin context and aborts the request.
-// If err is *apperrors.Error, its StatusCode is used.
-// Otherwise, the error is wrapped as an internal error with status 500.
+// It delegates to server.SetAppError for consistent error handling.
 func (c *Context) SetError(err error) {
-	var appErr *apperrors.Error
-	if errors.As(err, &appErr) {
-		c.Context.Set("app_error", appErr)
-		c.Context.AbortWithStatus(appErr.StatusCode)
-	} else {
-		wrapped := &apperrors.Error{
-			Code:       "internal_error",
-			Message:    err.Error(),
-			StatusCode: http.StatusInternalServerError,
-		}
-		c.Context.Set("app_error", wrapped)
-		c.Context.AbortWithStatus(http.StatusInternalServerError)
-	}
+	server.SetAppError(c.Context, err)
 }
 
 // GetError retrieves the stored error from the gin context.
