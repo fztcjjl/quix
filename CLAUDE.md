@@ -4,18 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-quix 是基于 Gin 的 Golang 快速开发框架，定位为薄封装。内置集成 Config/Log/Errors/Middleware/Transport 等基础设施组件，通过 Option 模式定制，提供合理的零配置默认值。支持通过 `protoc-gen-quix-gin` 插件从 protobuf IDL 自动生成 Gin 路由注册代码。
+quix 是基于 Gin 的 Golang 快速开发框架，定位为薄封装。内置集成 Config/Log/Errors/Middleware/Transport 等基础设施组件，通过 Option 模式定制，提供合理的零配置默认值。支持通过 `protoc-gen-quix-gin` 插件从 protobuf IDL 自动生成 Gin 路由注册代码，通过 `protoc-gen-quix-errors` 插件从 proto enum 自动生成错误码常量和构造函数。
 
 ## 开发命令
 
 ```bash
 go test ./...                              # 运行所有测试
 go test ./core/log/...                     # 运行指定组件的测试
-go test ./cmd/protoc-gen-quix-gin/... -run TestGenerate -update  # 更新 golden file
+go test ./cmd/protoc-gen-quix-gin/... -run TestGenerate -update  # 更新 gin 插件 golden file
+go test ./cmd/protoc-gen-quix-errors/... -run TestGenerate -update  # 更新 errors 插件 golden file
 go build ./...                             # 构建所有包
 go fmt ./...                               # 格式化代码
 golangci-lint run ./...                     # 代码检查
-go install ./cmd/protoc-gen-quix-gin           # 安装 protoc 插件到 $PATH
+go install ./cmd/protoc-gen-quix-gin           # 安装 protoc-gin 插件到 $PATH
+go install ./cmd/protoc-gen-quix-errors        # 安装 protoc-errors 插件到 $PATH
 ```
 
 无 Makefile 或构建系统，直接使用 Go 标准工具链。
@@ -35,6 +37,8 @@ quix/
 │           └── middleware/  # Recovery、ResponseMiddleware
 ├── middleware/           # 内置 Gin 中间件（recovery）
 ├── cmd/protoc-gen-quix-gin/  # protoc 插件：从 proto 生成 Gin 路由代码
+├── cmd/protoc-gen-quix-errors/  # protoc 插件：从 proto enum 生成错误码常量和构造函数
+├── proto/errdesc/           # 框架 proto：自定义 EnumValueOptions（http_status + error_message）
 ├── internal/protoc-gen-quix-gin/runtime/  # 插件运行时：Context 包装器、请求绑定、错误处理
 ├── examples/            # 各组件的可运行示例
 └── openspec/             # 变更管理（specs + changes/archive）
@@ -66,6 +70,19 @@ protoc -I proto --go_out=gen --go_opt=paths=source_relative \
 ```
 
 生成 `xxx_gin.go` 文件，包含：服务接口（`XxxHTTPService`）、路由注册函数（`RegisterXxxHTTPService`）、handler 函数（使用 `runtime.Context` 包装器）。
+
+## protoc-gen-quix-errors 插件
+
+从 proto enum + `errdesc.http_status` / `errdesc.error_message` 注解自动生成错误码常量和无参构造函数。
+
+```bash
+# 生成代码（buf）
+cd examples/proto-errors && buf generate
+```
+
+生成 `<enum_name>_errors.go` 文件，包含：错误码常量（`XxxCode`）、构造函数（`func Xxx() *apperrors.Error`）、WithDetails 变体（`func XxxWithDetails(details any) *apperrors.Error`）。Code/Message/StatusCode 全部来自 proto 定义，构造函数无参数。
+
+用户 proto 文件需 import `errdesc/errdesc.proto`。enum 值命名约定：`<ENUM_NAME>_<VALUE_NAME>`，如 `UserError::USER_ERROR_NOT_FOUND` 生成函数 `UserNotFound`。
 
 ## 技术栈
 

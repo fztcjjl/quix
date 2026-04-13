@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package errdesc;
+
+option go_package = "github.com/fztcjjl/quix/proto/errdesc;errdesc";
+
+import "google/protobuf/descriptor.proto";
+
+// Error descriptor options for annotating proto enum values with HTTP error metadata.
+extend google.protobuf.EnumValueOptions {
+  // http_status maps an enum value to an HTTP status code.
+  int32 http_status = 84001;
+  // error_message provides a human-readable error message for the enum value.
+  string error_message = 84002;
+}

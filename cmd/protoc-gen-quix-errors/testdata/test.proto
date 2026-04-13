@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "github.com/fztcjjl/quix/cmd/protoc-gen-quix-errors/testdata;testdata";
+
+import "errdesc/errdesc.proto";
+
+enum UserError {
+  USER_ERROR_UNSPECIFIED     = 0 [(errdesc.http_status) = 400, (errdesc.error_message) = "未知错误"];
+  USER_ERROR_NOT_FOUND       = 1 [(errdesc.http_status) = 404, (errdesc.error_message) = "用户不存在"];
+  USER_ERROR_ALREADY_EXISTS  = 2 [(errdesc.http_status) = 409, (errdesc.error_message) = "用户已存在"];
+  USER_ERROR_PERMISSION_DENIED = 3 [(errdesc.http_status) = 403, (errdesc.error_message) = "没有权限"];
+  USER_ERROR_INVALID_INPUT   = 4 [(errdesc.http_status) = 400, (errdesc.error_message) = "参数验证失败"];
+}
+
+// An enum without the annotation -- should produce no output.
+enum RegularEnum {
+  REGULAR_ENUM_UNKNOWN = 0;
+  REGULAR_ENUM_VALUE   = 1;
+}
+
+// An enum with http_status but no error_message -- should use enum value name as message.
+enum OrderError {
+  ORDER_ERROR_UNSPECIFIED    = 0 [(errdesc.http_status) = 400];
+  ORDER_ERROR_NOT_FOUND      = 1 [(errdesc.http_status) = 404];
+  ORDER_ERROR_PAYMENT_FAILED = 2 [(errdesc.http_status) = 402];
+}
