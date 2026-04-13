@@ -1,0 +1,94 @@
+syntax = "proto3";
+
+package test;
+
+option go_package = "github.com/fztcjjl/quix/cmd/protoc-gen-gin/testdata;testdata";
+
+import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
+
+service Greeter {
+  // GET with path param
+  rpc SayHello (HelloRequest) returns (HelloReply) {
+    option (google.api.http) = {
+      get: "/hello/{name}"
+    };
+  }
+
+  // POST with body "*"
+  rpc CreateUser (CreateUserRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      post: "/users"
+      body: "*"
+    };
+  }
+
+  // PUT with body field
+  rpc UpdateUser (UpdateUserRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      put: "/users/{user_id}"
+      body: "user"
+    };
+  }
+
+  // DELETE with no body
+  rpc DeleteUser (DeleteUserRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/users/{user_id}"
+    };
+  }
+
+  // Additional bindings — same rpc, two routes
+  rpc SearchUsers (SearchUsersRequest) returns (UserListResponse) {
+    option (google.api.http) = {
+      get: "/users/search"
+      additional_bindings {
+        post: "/users/search"
+        body: "*"
+      }
+    };
+  }
+}
+
+message HelloRequest {
+  string name = 1;
+}
+
+message HelloReply {
+  string message = 1;
+}
+
+message CreateUserRequest {
+  string name = 1;
+  string email = 2;
+}
+
+message UpdateUserRequest {
+  string user_id = 1;
+  UserUpdate user = 2;
+}
+
+message UserUpdate {
+  string name = 1;
+  string email = 2;
+}
+
+message UserResponse {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message SearchUsersRequest {
+  string query = 1;
+  int32 page_size = 2;
+}
+
+message UserListResponse {
+  repeated UserResponse users = 1;
+  int32 total = 2;
+}
