@@ -67,7 +67,7 @@ func NewServer(opts ...Option) *Server {
 	}
 
 	if o.defaultMiddleware {
-		engine.Use(middleware.Recovery(), requestid.New(), middleware.ResponseMiddleware())
+		engine.Use(middleware.Recovery(), requestid.New(), middleware.Logging(), middleware.ResponseMiddleware())
 	}
 
 	return s
