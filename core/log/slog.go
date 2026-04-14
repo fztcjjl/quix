@@ -2,12 +2,13 @@ package log
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
+	"os"
 )
 
 type slogLogger struct {
-	sl *slog.Logger
+	sl    *slog.Logger
+	level Level
 }
 
 // NewSlog creates a Logger backed by Go stdlib slog.
@@ -20,38 +21,48 @@ func NewSlog(sl ...*slog.Logger) Logger {
 }
 
 func (l *slogLogger) Info(ctx context.Context, msg string, args ...any) {
-	l.sl.InfoContext(ctx, msg, toSlogArgs(args)...)
+	if l.level > LevelInfo {
+		return
+	}
+	l.sl.InfoContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Error(ctx context.Context, msg string, args ...any) {
-	l.sl.ErrorContext(ctx, msg, toSlogArgs(args)...)
+	if l.level > LevelError {
+		return
+	}
+	l.sl.ErrorContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Warn(ctx context.Context, msg string, args ...any) {
-	l.sl.WarnContext(ctx, msg, toSlogArgs(args)...)
+	if l.level > LevelWarn {
+		return
+	}
+	l.sl.WarnContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Debug(ctx context.Context, msg string, args ...any) {
-	l.sl.DebugContext(ctx, msg, toSlogArgs(args)...)
+	if l.level > LevelDebug {
+		return
+	}
+	l.sl.DebugContext(ctx, msg, normalizeArgs(args)...)
+}
+
+func (l *slogLogger) Fatal(ctx context.Context, msg string, args ...any) {
+	l.sl.ErrorContext(ctx, msg, normalizeArgs(args)...)
+	os.Exit(1)
 }
 
 func (l *slogLogger) With(args ...any) Logger {
-	return &slogLogger{sl: l.sl.With(toSlogArgs(args)...)}
+	return &slogLogger{sl: l.sl.With(normalizeArgs(args)...), level: l.level}
 }
 
-// toSlogArgs converts key-value pairs to slog arguments.
-// Non-string keys are wrapped with a "key" prefix. Odd trailing args are dropped.
-func toSlogArgs(args []any) []any {
-	for i := 0; i+1 < len(args); i += 2 {
-		if _, ok := args[i].(string); !ok {
-			args[i] = slog.String("key", fmt.Sprintf("%v", args[i]))
-			args[i+1] = slog.Any("value", args[i+1])
-		}
-	}
-	if len(args)%2 != 0 {
-		args = args[:len(args)-1]
-	}
-	return args
+func (l *slogLogger) SetLevel(level Level) {
+	l.level = level
+}
+
+func (l *slogLogger) Close() error {
+	return nil
 }
 
 var _ Logger = (*slogLogger)(nil)

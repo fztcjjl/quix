@@ -27,7 +27,7 @@ func TestNewDefaultLogger(t *testing.T) {
 }
 
 func TestWithLoggerInject(t *testing.T) {
-	custom := &mockLogger{}
+	custom := log.NewSlog()
 	app := New(WithLogger(custom))
 	if app.Logger() != custom {
 		t.Fatal("WithLogger did not inject the custom logger")
@@ -35,7 +35,7 @@ func TestWithLoggerInject(t *testing.T) {
 }
 
 func TestWithLoggerCompileCheck(t *testing.T) {
-	var _ Option = WithLogger(&mockLogger{})
+	var _ Option = WithLogger(log.NewSlog())
 }
 
 func TestWithConfigInject(t *testing.T) {
@@ -120,14 +120,6 @@ func (m *mockConfig) String(key string) string          { return "" }
 func (m *mockConfig) Int(key string) int                { return 0 }
 func (m *mockConfig) Bool(key string) bool              { return false }
 func (m *mockConfig) Bind(key string, target any) error { return nil }
-
-type mockLogger struct{}
-
-func (m *mockLogger) Info(ctx context.Context, msg string, args ...any)  {}
-func (m *mockLogger) Error(ctx context.Context, msg string, args ...any) {}
-func (m *mockLogger) Warn(ctx context.Context, msg string, args ...any)  {}
-func (m *mockLogger) Debug(ctx context.Context, msg string, args ...any) {}
-func (m *mockLogger) With(args ...any) log.Logger                        { return m }
 
 type mockTransportServer struct{}
 

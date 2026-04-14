@@ -31,7 +31,7 @@ quix/
 ├── core/
 │   ├── errors/           # 结构化错误类型（Error + 预定义函数）
 │   ├── config/           # 配置加载（koanf）
-│   ├── log/              # 日志（默认 slog，可选 Zerolog/Zap 适配器）
+│   ├── log/              # 日志（Logger 接口、级别控制、slog 默认、可选 Zerolog/Zap 适配器、MockLogger）
 │   └── transport/
 │       └── http/server/  # HTTP Server（嵌入 gin.Engine）+ Handler 包装 + 默认中间件
 │           └── middleware/  # Recovery、ResponseMiddleware、Logging
@@ -49,7 +49,7 @@ quix/
 - **组件位置**: 所有框架组件放在 `core/<component>/` 下，不放在根包
 - **接口优先**: 每个能力定义最小化 Go 接口，第三方库通过适配器模式封装
 - **Option 模式**: App 配置使用 `func(*App)` 选项函数 — `quix.New(quix.WithLogger(...))`。默认实现零配置
-- **Key-value 日志**: Logger 使用 `log.Info(ctx, "msg", "key", val)` 键值对交替风格
+- **Key-value 日志**: Logger 使用 `log.Info(ctx, "msg", "key", val)` 键值对交替风格。非字符串 key 自动转为 `key_0`/`key_1` 序号后缀，奇数尾部 key 静默丢弃
 - **示例必须**: 每个组件必须在 `examples/<component>/` 下提供可运行的示例代码
 - **写完代码必须格式化**: 每次 Write/Edit Go 文件后，必须执行 `go fmt ./...`
 - **完成一组任务后必须 lint**: 每完成一个任务组（如接口定义、实现、测试），必须执行 `golangci-lint run ./...`
@@ -90,8 +90,7 @@ cd examples/proto-demo && buf generate
 ## 技术栈
 
 - HTTP: Gin
-- 默认日志: slog
-- 可选日志: Zerolog、Zap（薄适配器）
+- 日志: Logger 统一接口（`core/log` 包默认 Slog；`quix.New()` 默认 Zerolog；可选 Zap 适配器；支持 `NewWriter(io.Writer)` 零依赖适配器）
 - 配置: koanf
 - 指标/追踪: OpenTelemetry（可选）
 - IDL: protobuf + `google.api.http` 注解

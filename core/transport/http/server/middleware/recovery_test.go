@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,14 +12,6 @@ import (
 func init() {
 	gin.SetMode(gin.TestMode)
 }
-
-type mockLogger struct{}
-
-func (m *mockLogger) Info(_ context.Context, _ string, _ ...any)  {}
-func (m *mockLogger) Error(_ context.Context, _ string, _ ...any) {}
-func (m *mockLogger) Warn(_ context.Context, _ string, _ ...any)  {}
-func (m *mockLogger) Debug(_ context.Context, _ string, _ ...any) {}
-func (m *mockLogger) With(_ ...any) log.Logger                    { return m }
 
 func TestRecoveryNoPanic(t *testing.T) {
 	r := gin.New()
@@ -39,7 +30,8 @@ func TestRecoveryNoPanic(t *testing.T) {
 }
 
 func TestRecoveryCatchesPanic(t *testing.T) {
-	log.SetDefault(&mockLogger{})
+	// Use a captureLogger to absorb panic output during test
+	log.SetDefault(&captureLogger{})
 
 	r := gin.New()
 	r.Use(Recovery())

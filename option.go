@@ -12,9 +12,11 @@ import (
 type Option func(*App)
 
 // WithLogger sets a custom Logger implementation for the App.
+// It also updates the global default Logger.
 func WithLogger(l log.Logger) Option {
 	return func(a *App) {
 		a.logger = l
+		log.SetDefault(l)
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,7 +17,14 @@ import (
 
 // captureLogger captures log records for testing.
 type captureLogger struct {
-	records []slog.Record
+	records []captureRecord
+	mu      sync.Mutex
+}
+
+type captureRecord struct {
+	level slog.Level
+	msg   string
+	args  []any
 }
 
 func (l *captureLogger) Info(_ context.Context, msg string, args ...any) {
@@ -31,30 +39,44 @@ func (l *captureLogger) Warn(_ context.Context, msg string, args ...any) {
 func (l *captureLogger) Debug(_ context.Context, msg string, args ...any) {
 	l.add(slog.LevelDebug, msg, args)
 }
-func (l *captureLogger) With(_ ...any) log.Logger { return l }
+func (l *captureLogger) Fatal(_ context.Context, _ string, _ ...any) {}
+func (l *captureLogger) With(_ ...any) log.Logger                    { return l }
+func (l *captureLogger) SetLevel(_ log.Level)                        {}
+func (l *captureLogger) Close() error                                { return nil }
 
 func (l *captureLogger) add(level slog.Level, msg string, args []any) {
-	var attrs []slog.Attr
-	for i := 0; i < len(args); i += 2 {
-		if i+1 < len(args) {
-			attrs = append(attrs, slog.Any(args[i].(string), args[i+1]))
-		}
-	}
-	r := slog.NewRecord(time.Time{}, level, msg, 0)
-	r.AddAttrs(attrs...)
-	l.records = append(l.records, r)
+	l.mu.Lock()
+	l.records = append(l.records, captureRecord{level, msg, args})
+	l.mu.Unlock()
 }
 
-// toMap extracts key-value pairs from a captureLogger's records.
 func (l *captureLogger) toMap() map[string]any {
 	m := make(map[string]any)
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	for _, r := range l.records {
-		r.Attrs(func(a slog.Attr) bool {
-			m[a.Key] = a.Value.Any()
-			return true
-		})
+		for i := 0; i+1 < len(r.args); i += 2 {
+			key, _ := r.args[i].(string)
+			m[key] = r.args[i+1]
+		}
 	}
 	return m
+}
+
+func (l *captureLogger) level() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.records {
+		switch r.level {
+		case slog.LevelError:
+			return "ERROR"
+		case slog.LevelWarn:
+			return "WARN"
+		case slog.LevelInfo:
+			return "INFO"
+		}
+	}
+	return ""
 }
 
 func setupRouter(mw gin.HandlerFunc) *gin.Engine {
@@ -92,7 +114,7 @@ func TestLoggingFields(t *testing.T) {
 	if fields["path"] != "/ok" {
 		t.Errorf("path = %v, want /ok", fields["path"])
 	}
-	if fields["status"] != int64(200) {
+	if fields["status"] != 200 {
 		t.Errorf("status = %v, want 200", fields["status"])
 	}
 }
@@ -101,11 +123,11 @@ func TestLoggingLevelByStatusCode(t *testing.T) {
 	tests := []struct {
 		name      string
 		path      string
-		wantLevel slog.Level
+		wantLevel string
 	}{
-		{"2xx uses Info", "/ok", slog.LevelInfo},
-		{"4xx uses Warn", "/notfound", slog.LevelWarn},
-		{"5xx uses Error", "/server-error", slog.LevelError},
+		{"2xx uses Info", "/ok", "INFO"},
+		{"4xx uses Warn", "/notfound", "WARN"},
+		{"5xx uses Error", "/server-error", "ERROR"},
 	}
 
 	for _, tt := range tests {
@@ -119,11 +141,7 @@ func TestLoggingLevelByStatusCode(t *testing.T) {
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
-			if len(cap.records) == 0 {
-				t.Fatal("no log records captured")
-			}
-
-			got := cap.records[0].Level
+			got := cap.level()
 			if got != tt.wantLevel {
 				t.Errorf("log level = %v, want %v", got, tt.wantLevel)
 			}
@@ -142,8 +160,12 @@ func TestLoggingSkipPaths(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if len(cap.records) != 0 {
-		t.Errorf("expected no log for skipped path /healthz, got %d records", len(cap.records))
+	cap.mu.Lock()
+	totalCalls := len(cap.records)
+	cap.mu.Unlock()
+
+	if totalCalls != 0 {
+		t.Errorf("expected no log for skipped path /healthz, got %d records", totalCalls)
 	}
 
 	// Request to non-skipped path
@@ -151,7 +173,11 @@ func TestLoggingSkipPaths(t *testing.T) {
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if len(cap.records) == 0 {
+	cap.mu.Lock()
+	totalCalls = len(cap.records)
+	cap.mu.Unlock()
+
+	if totalCalls == 0 {
 		t.Error("expected log for non-skipped path /ok, got 0 records")
 	}
 }
@@ -236,7 +262,120 @@ func (l *slogLoggerAdapter) log(ctx context.Context, level slog.Level, msg strin
 	_ = l.handler.Handle(ctx, r)
 }
 
-func (l *slogLoggerAdapter) With(args ...any) log.Logger {
-	// Not needed for tests
-	return l
+func (l *slogLoggerAdapter) Fatal(_ context.Context, _ string, _ ...any) {}
+func (l *slogLoggerAdapter) With(_ ...any) log.Logger                    { return l }
+func (l *slogLoggerAdapter) SetLevel(_ log.Level)                        {}
+func (l *slogLoggerAdapter) Close() error                                { return nil }
+
+func TestIsSkipped(t *testing.T) {
+	tests := []struct {
+		name      string
+		path      string
+		skipPaths []string
+		want      bool
+	}{
+		{"exact match", "/healthz", []string{"/healthz"}, true},
+		{"exact no match", "/healthz/ready", []string{"/healthz"}, false},
+		{"prefix match", "/metrics/health", []string{"/metrics/"}, true},
+		{"prefix rejects parent", "/metrics", []string{"/metrics/"}, false},
+		{"prefix match nested", "/metrics/cpu", []string{"/metrics/"}, true},
+		{"empty skipPaths", "/healthz", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isSkipped(tt.path, tt.skipPaths)
+			if got != tt.want {
+				t.Errorf("isSkipped(%q, %v) = %v, want %v", tt.path, tt.skipPaths, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoggingWithSkipPathsPrefixMatch(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(LoggingWith(WithSkipPaths("/metrics/")))
+	r.GET("/metrics/health", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/metrics", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	// Prefix match should skip
+	req := httptest.NewRequest(http.MethodGet, "/metrics/health", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	totalCalls := len(cap.records)
+	cap.mu.Unlock()
+
+	if totalCalls != 0 {
+		t.Errorf("expected no log for /metrics/health, got %d records", totalCalls)
+	}
+
+	// Parent path should NOT be skipped
+	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	totalCalls = len(cap.records)
+	cap.mu.Unlock()
+
+	if totalCalls == 0 {
+		t.Error("expected log for /metrics, got 0 records")
+	}
+
+	// Unrelated path should NOT be skipped
+	req = httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	totalCalls = len(cap.records)
+	cap.mu.Unlock()
+
+	if totalCalls == 0 {
+		t.Error("expected log for /ok, got 0 records")
+	}
+}
+
+func TestLoggingWithHook(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	var hookCalled bool
+	var hookFields map[string]any
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(LoggingWith(WithHook(func(c *gin.Context, fields map[string]any) {
+		hookCalled = true
+		hookFields = fields
+		fields["custom_key"] = "custom_val"
+	})))
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if !hookCalled {
+		t.Fatal("hook was not called")
+	}
+	if hookFields == nil {
+		t.Fatal("hook received nil fields")
+	}
+	if hookFields["method"] != "GET" {
+		t.Errorf("hook fields method = %v, want GET", hookFields["method"])
+	}
+
+	// Custom field should appear in the log output
+	fields := cap.toMap()
+	if fields["custom_key"] != "custom_val" {
+		t.Errorf("expected custom_key=custom_val in log output, got %v", fields)
+	}
 }

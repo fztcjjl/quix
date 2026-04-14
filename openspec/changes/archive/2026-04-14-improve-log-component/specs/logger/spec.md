@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Unified Logger interface
 quix 框架 SHALL 在 `core/log/` 包中定义最小化的 Logger 接口，包含 8 个方法：Info、Error、Warn、Debug、Fatal、With、SetLevel、Close。所有框架内部组件 MUST 通过此接口输出日志。
 
@@ -147,6 +149,8 @@ quix 框架 SHALL 在 `examples/log/` 目录下提供可运行的示例代码，
 #### Scenario: Example code is runnable
 - **WHEN** 开发者在项目根目录执行 `go run examples/log/slog/main.go`
 - **THEN** MUST 编译通过并正常输出日志，无需额外配置
+
+## ADDED Requirements
 
 ### Requirement: File naming convention
 `core/log/` 包中定义 Logger 接口和全局函数的文件 MUST 命名为 `logger.go`，对应的测试文件 MUST 命名为 `logger_test.go`。

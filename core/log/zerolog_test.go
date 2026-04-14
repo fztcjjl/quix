@@ -79,3 +79,58 @@ func TestZerologOddArgsDropped(t *testing.T) {
 	// 3 args: odd trailing should be dropped, no panic
 	zl.Info(ctx, "odd args", "key1")
 }
+
+func TestZerologNonStringKey(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
+	ctx := context.Background()
+
+	zl.Info(ctx, "test", 123, "value")
+	output := buf.String()
+	if !strings.Contains(output, "key_0") || !strings.Contains(output, "value") {
+		t.Errorf("expected key_0=value in output, got: %s", output)
+	}
+}
+
+func TestZerologMultipleNonStringKeys(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
+	ctx := context.Background()
+
+	zl.Info(ctx, "test", 123, "a", 456, "b")
+	output := buf.String()
+	if !strings.Contains(output, "key_0") || !strings.Contains(output, "a") {
+		t.Errorf("expected key_0=a in output, got: %s", output)
+	}
+	if !strings.Contains(output, "key_1") || !strings.Contains(output, "b") {
+		t.Errorf("expected key_1=b in output, got: %s", output)
+	}
+}
+
+func TestZerologSetLevel(t *testing.T) {
+	l, buf := newTestZerologLogger()
+	zl := NewZerolog(l)
+	ctx := context.Background()
+
+	zl.SetLevel(LevelError)
+
+	buf.Reset()
+	zl.Info(ctx, "info msg")
+	if buf.String() != "" {
+		t.Errorf("info should be suppressed at LevelError, got: %s", buf.String())
+	}
+
+	buf.Reset()
+	zl.Error(ctx, "error msg")
+	if !strings.Contains(buf.String(), "error msg") {
+		t.Errorf("error should be emitted at LevelError, got: %s", buf.String())
+	}
+}
+
+func TestZerologClose(t *testing.T) {
+	l, _ := newTestZerologLogger()
+	zl := NewZerolog(l)
+	if err := zl.Close(); err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+}
