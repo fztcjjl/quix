@@ -76,7 +76,7 @@ func TestEnumPrefix(t *testing.T) {
 func TestGenerate(t *testing.T) {
 	protoFiles := []*descriptorpb.FileDescriptorProto{
 		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
-		protodesc.ToFileDescriptorProto(errdesc.File_errdesc_errdesc_proto),
+		protodesc.ToFileDescriptorProto(errdesc.File_errdesc_proto),
 		buildTestProtoFile(),
 	}
 
@@ -145,7 +145,7 @@ func buildTestProtoFile() *descriptorpb.FileDescriptorProto {
 		Options: &descriptorpb.FileOptions{
 			GoPackage: proto.String("github.com/fztcjjl/quix/cmd/protoc-gen-quix-errors/testdata;testdata"),
 		},
-		Dependency: []string{"errdesc/errdesc.proto"},
+		Dependency: []string{"errdesc.proto"},
 		EnumType: []*descriptorpb.EnumDescriptorProto{
 			{
 				Name: proto.String("UserError"),

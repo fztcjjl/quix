@@ -4,7 +4,7 @@ package test;
 
 option go_package = "github.com/fztcjjl/quix/cmd/protoc-gen-quix-errors/testdata;testdata";
 
-import "errdesc/errdesc.proto";
+import "errdesc.proto";
 
 enum UserError {
   USER_ERROR_UNSPECIFIED     = 0 [(errdesc.http_status) = 400, (errdesc.error_message) = "未知错误"];

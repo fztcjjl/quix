@@ -34,7 +34,7 @@ quix/
 │   ├── log/              # 日志（默认 slog，可选 Zerolog/Zap 适配器）
 │   └── transport/
 │       └── http/server/  # HTTP Server（嵌入 gin.Engine）+ Handler 包装 + 默认中间件
-│           └── middleware/  # Recovery、ResponseMiddleware
+│           └── middleware/  # Recovery、ResponseMiddleware、Logging
 ├── middleware/           # 内置 Gin 中间件（recovery）
 ├── cmd/protoc-gen-quix-gin/  # protoc 插件：从 proto 生成 Gin 路由代码
 ├── cmd/protoc-gen-quix-errors/  # protoc 插件：从 proto enum 生成错误码常量和构造函数
@@ -61,12 +61,7 @@ quix/
 
 ```bash
 # 生成代码（buf）
-cd examples/proto-api && buf generate
-
-# 生成代码（protoc）
-protoc -I proto --go_out=gen --go_opt=paths=source_relative \
-  --quix-gin_out=gen --quix-gin_opt=paths=source_relative \
-  proto/greeter/greeter.proto
+cd examples/proto-demo && buf generate
 ```
 
 生成 `xxx_gin.go` 文件，包含：服务接口（`XxxHTTPService`）、路由注册函数（`RegisterXxxHTTPService`）、handler 函数（使用 `runtime.Context` 包装器）。
@@ -75,14 +70,22 @@ protoc -I proto --go_out=gen --go_opt=paths=source_relative \
 
 从 proto enum + `errdesc.http_status` / `errdesc.error_message` 注解自动生成错误码常量和无参构造函数。
 
-```bash
-# 生成代码（buf）
-cd examples/proto-errors && buf generate
-```
-
 生成 `<enum_name>_errors.go` 文件，包含：错误码常量（`XxxCode`）、构造函数（`func Xxx() *apperrors.Error`）、WithDetails 变体（`func XxxWithDetails(details any) *apperrors.Error`）。Code/Message/StatusCode 全部来自 proto 定义，构造函数无参数。
 
-用户 proto 文件需 import `errdesc/errdesc.proto`。enum 值命名约定：`<ENUM_NAME>_<VALUE_NAME>`，如 `UserError::USER_ERROR_NOT_FOUND` 生成函数 `UserNotFound`。
+用户 proto 文件需 import `errdesc/errdesc.proto`。无 `errdesc` 注解的 enum 不会被生成。
+
+### 集中错误定义（ErrorDef）
+
+推荐使用 `enum ErrorDef` 集中定义全项目错误码，放在独立的 `proto/errors/` 目录下。枚举值采用 `ERROR_<模块>_<错误>` 命名约定，插件自动生成 `func <模块><错误>()`（如 `ERROR_TASK_NOT_FOUND` → `func TaskNotFound()`）。
+
+## proto-demo 综合示例
+
+`examples/proto-demo/` 演示 protoc-gen-quix-gin 和 protoc-gen-quix-errors 的配合使用。包含任务管理 API（Task CRUD），展示：
+- `ErrorDef` 集中错误定义（`proto/errors/errors.proto`）与 service 定义（`proto/task/v1/`）分离
+- 枚举值命名约定：`ERROR_<模块>_<错误>`（如 `ERROR_TASK_NOT_FOUND`）
+- BSR 依赖引用（`buf.build/fztcjjl/quix`）
+- 三个插件（go + quix-gin + quix-errors）同时启用
+- 生成的错误码在 handler 中的实际使用
 
 ## 技术栈
 

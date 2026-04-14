@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+package task.v1;
+
+option go_package = "github.com/fztcjjl/quix/examples/proto-demo/gen/task/v1;taskv1";
+
+import "google/api/annotations.proto";
+import "errors/errors.proto";
+
+// Task represents a task item.
+message Task {
+  string id = 1;
+  string title = 2;
+  TaskStatus status = 3;
+}
+
+// TaskStatus represents the status of a task.
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_TODO         = 1;
+  TASK_STATUS_DONE         = 2;
+}
+
+// TaskService provides CRUD operations for tasks.
+service TaskService {
+  // CreateTask creates a new task.
+  rpc CreateTask(CreateTaskRequest) returns (Task) {
+    option (google.api.http) = {
+      post: "/api/v1/tasks"
+      body: "*"
+    };
+  }
+
+  // GetTask returns a task by ID.
+  rpc GetTask(GetTaskRequest) returns (Task) {
+    option (google.api.http) = {
+      get: "/api/v1/tasks/{task_id}"
+    };
+  }
+
+  // ListTasks returns all tasks.
+  rpc ListTasks(ListTasksRequest) returns (TaskList) {
+    option (google.api.http) = {
+      get: "/api/v1/tasks"
+    };
+  }
+
+  // DeleteTask deletes a task by ID and returns the deleted task.
+  rpc DeleteTask(DeleteTaskRequest) returns (Task) {
+    option (google.api.http) = {
+      delete: "/api/v1/tasks/{task_id}"
+    };
+  }
+}
+
+message CreateTaskRequest {
+  string title = 1;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message ListTasksRequest {}
+
+message TaskList {
+  repeated Task tasks = 1;
+}
+
+message DeleteTaskRequest {
+  string task_id = 1;
+}

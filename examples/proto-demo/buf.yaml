@@ -1,0 +1,6 @@
+version: v2
+modules:
+  - path: proto
+deps:
+  - buf.build/fztcjjl/quix
+  - buf.build/googleapis/googleapis

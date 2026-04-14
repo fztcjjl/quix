@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package errors;
+
+option go_package = "github.com/fztcjjl/quix/examples/proto-demo/gen/errors;errors";
+
+import "errdesc/errdesc.proto";
+
+// ErrorDef defines all error codes for the project.
+// Values follow the naming convention: ERROR_<module>_<specific_error>.
+enum ErrorDef {
+  ERROR_TASK_UNSPECIFIED    = 0 [(errdesc.http_status) = 500, (errdesc.error_message) = "未知错误"];
+  ERROR_TASK_NOT_FOUND      = 1 [(errdesc.http_status) = 404, (errdesc.error_message) = "任务不存在"];
+  ERROR_TASK_TITLE_REQUIRED = 2 [(errdesc.http_status) = 400, (errdesc.error_message) = "任务标题不能为空"];
+  ERROR_TASK_ALREADY_DONE   = 3 [(errdesc.http_status) = 409, (errdesc.error_message) = "任务已完成"];
+}

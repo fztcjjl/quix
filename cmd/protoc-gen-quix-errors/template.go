@@ -63,6 +63,12 @@ func enumPrefix(enumName string) string {
 	return strings.ToUpper(toSnakeCase(enumName)) + "_"
 }
 
+// toLowerSpace converts UPPER_SNAKE_CASE to lower space-separated form.
+// e.g., "ERROR_TASK_NOT_FOUND" → "error task not found"
+func toLowerSpace(s string) string {
+	return strings.ToLower(strings.ReplaceAll(s, "_", " "))
+}
+
 // EnumValueData holds data for a single proto enum value.
 type EnumValueData struct {
 	ProtoName     string // e.g., USER_NOT_FOUND

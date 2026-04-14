@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: errdesc/errdesc.proto
+// source: errdesc.proto
 
 package errdesc
 
@@ -21,14 +21,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-var file_errdesc_errdesc_proto_extTypes = []protoimpl.ExtensionInfo{
+var file_errdesc_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
 		ExtendedType:  (*descriptorpb.EnumValueOptions)(nil),
 		ExtensionType: (*int32)(nil),
 		Field:         84001,
 		Name:          "errdesc.http_status",
 		Tag:           "varint,84001,opt,name=http_status",
-		Filename:      "errdesc/errdesc.proto",
+		Filename:      "errdesc.proto",
 	},
 	{
 		ExtendedType:  (*descriptorpb.EnumValueOptions)(nil),
@@ -36,7 +36,7 @@ var file_errdesc_errdesc_proto_extTypes = []protoimpl.ExtensionInfo{
 		Field:         84002,
 		Name:          "errdesc.error_message",
 		Tag:           "bytes,84002,opt,name=error_message",
-		Filename:      "errdesc/errdesc.proto",
+		Filename:      "errdesc.proto",
 	},
 }
 
@@ -45,26 +45,26 @@ var (
 	// http_status maps an enum value to an HTTP status code.
 	//
 	// optional int32 http_status = 84001;
-	E_HttpStatus = &file_errdesc_errdesc_proto_extTypes[0]
+	E_HttpStatus = &file_errdesc_proto_extTypes[0]
 	// error_message provides a human-readable error message for the enum value.
 	//
 	// optional string error_message = 84002;
-	E_ErrorMessage = &file_errdesc_errdesc_proto_extTypes[1]
+	E_ErrorMessage = &file_errdesc_proto_extTypes[1]
 )
 
-var File_errdesc_errdesc_proto protoreflect.FileDescriptor
+var File_errdesc_proto protoreflect.FileDescriptor
 
-const file_errdesc_errdesc_proto_rawDesc = "" +
+const file_errdesc_proto_rawDesc = "" +
 	"\n" +
-	"\x15errdesc/errdesc.proto\x12\aerrdesc\x1a google/protobuf/descriptor.proto:D\n" +
+	"\rerrdesc.proto\x12\aerrdesc\x1a google/protobuf/descriptor.proto:D\n" +
 	"\vhttp_status\x12!.google.protobuf.EnumValueOptions\x18\xa1\x90\x05 \x01(\x05R\n" +
 	"httpStatus:H\n" +
 	"\rerror_message\x12!.google.protobuf.EnumValueOptions\x18\xa2\x90\x05 \x01(\tR\ferrorMessageB/Z-github.com/fztcjjl/quix/proto/errdesc;errdescb\x06proto3"
 
-var file_errdesc_errdesc_proto_goTypes = []any{
+var file_errdesc_proto_goTypes = []any{
 	(*descriptorpb.EnumValueOptions)(nil), // 0: google.protobuf.EnumValueOptions
 }
-var file_errdesc_errdesc_proto_depIdxs = []int32{
+var file_errdesc_proto_depIdxs = []int32{
 	0, // 0: errdesc.http_status:extendee -> google.protobuf.EnumValueOptions
 	0, // 1: errdesc.error_message:extendee -> google.protobuf.EnumValueOptions
 	2, // [2:2] is the sub-list for method output_type
@@ -74,26 +74,26 @@ var file_errdesc_errdesc_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_errdesc_errdesc_proto_init() }
-func file_errdesc_errdesc_proto_init() {
-	if File_errdesc_errdesc_proto != nil {
+func init() { file_errdesc_proto_init() }
+func file_errdesc_proto_init() {
+	if File_errdesc_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_errdesc_errdesc_proto_rawDesc), len(file_errdesc_errdesc_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_errdesc_proto_rawDesc), len(file_errdesc_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   0,
 			NumExtensions: 2,
 			NumServices:   0,
 		},
-		GoTypes:           file_errdesc_errdesc_proto_goTypes,
-		DependencyIndexes: file_errdesc_errdesc_proto_depIdxs,
-		ExtensionInfos:    file_errdesc_errdesc_proto_extTypes,
+		GoTypes:           file_errdesc_proto_goTypes,
+		DependencyIndexes: file_errdesc_proto_depIdxs,
+		ExtensionInfos:    file_errdesc_proto_extTypes,
 	}.Build()
-	File_errdesc_errdesc_proto = out.File
-	file_errdesc_errdesc_proto_goTypes = nil
-	file_errdesc_errdesc_proto_depIdxs = nil
+	File_errdesc_proto = out.File
+	file_errdesc_proto_goTypes = nil
+	file_errdesc_proto_depIdxs = nil
 }

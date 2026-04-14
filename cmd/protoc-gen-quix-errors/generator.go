@@ -51,10 +51,11 @@ func extractEnumValues(enum *protogen.Enum) []EnumValueData {
 			continue
 		}
 
-		httpStatus, ok := proto.GetExtension(opts, errdesc.E_HttpStatus).(int32)
-		if !ok {
+		if !proto.HasExtension(opts, errdesc.E_HttpStatus) {
 			continue
 		}
+
+		httpStatus := proto.GetExtension(opts, errdesc.E_HttpStatus).(int32)
 
 		message := ""
 		if rawMsg, ok := proto.GetExtension(opts, errdesc.E_ErrorMessage).(string); ok {
@@ -68,7 +69,9 @@ func extractEnumValues(enum *protogen.Enum) []EnumValueData {
 		valueName := string(val.Desc.Name())
 		stripped := strings.TrimPrefix(valueName, prefix)
 		if stripped == valueName {
-			stripped = valueName
+			// Prefix didn't match (e.g., ErrorDef enum with ERROR_TASK_ values).
+			// Try stripping the "ERROR_" common prefix.
+			stripped = strings.TrimPrefix(valueName, "ERROR_")
 		}
 
 		funcName := toPascalCase(stripped)
@@ -86,7 +89,7 @@ func extractEnumValues(enum *protogen.Enum) []EnumValueData {
 			ConstName:     toPascalCase(valueName) + "Code",
 			FuncName:      funcName,
 			FuncNameWD:    funcName + "WithDetails",
-			Code:          valueName,
+			Code:          toLowerSpace(valueName),
 			Message:       message,
 			HTTPStatus:    int(httpStatus),
 			IsUnspecified: val.Desc.Number() == 0,
