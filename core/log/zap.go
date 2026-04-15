@@ -9,7 +9,7 @@ import (
 
 type zapLogger struct {
 	sl    *zap.SugaredLogger
-	level Level
+	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
 }
 
 // NewZap creates a Logger backed by zap.SugaredLogger.
@@ -59,6 +59,7 @@ func (z *zapLogger) SetLevel(level Level) {
 }
 
 func (z *zapLogger) Close() error {
+	defer func() { _ = recover() }()
 	return z.sl.Sync()
 }
 

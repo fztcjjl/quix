@@ -8,7 +8,7 @@ import (
 
 type slogLogger struct {
 	sl    *slog.Logger
-	level Level
+	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
 }
 
 // NewSlog creates a Logger backed by Go stdlib slog.

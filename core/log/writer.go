@@ -9,7 +9,7 @@ import (
 
 type writerLogger struct {
 	sl    *slog.Logger
-	level Level
+	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
 }
 
 // NewWriter creates a Logger backed by an io.Writer using slog.JSONHandler.

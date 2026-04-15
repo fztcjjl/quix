@@ -9,7 +9,7 @@ import (
 
 type zerologLogger struct {
 	l     zerolog.Logger
-	level Level
+	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
 }
 
 // NewZerolog creates a Logger backed by zerolog.
