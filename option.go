@@ -3,6 +3,7 @@ package quix
 import (
 	"github.com/fztcjjl/quix/core/config"
 	"github.com/fztcjjl/quix/core/log"
+	"github.com/fztcjjl/quix/core/telemetry"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
@@ -52,5 +53,14 @@ func WithGinMode(mode string) Option {
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(a *App) {
 		a.defaultMiddleware = enabled
+	}
+}
+
+// WithTelemetry enables OpenTelemetry instrumentation.
+// It initializes TracerProvider and MeterProvider, and configures the App
+// to flush telemetry on shutdown.
+func WithTelemetry(opts ...telemetry.Option) Option {
+	return func(a *App) {
+		a.telemetryOpts = opts
 	}
 }

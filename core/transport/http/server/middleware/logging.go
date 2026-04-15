@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -12,6 +13,11 @@ import (
 // LoggingHookFunc is called after each request with the collected log fields.
 // It can be used to add custom fields or perform side effects.
 type LoggingHookFunc func(c *gin.Context, fields map[string]any)
+
+// ExtractTraceID extracts trace_id from context for logging middleware.
+// Set this variable to enable trace_id output in access logs.
+// When nil (default), no trace_id is included in log output.
+var ExtractTraceID func(ctx context.Context) string
 
 // loggingConfig holds configuration for the logging middleware.
 type loggingConfig struct {
@@ -93,11 +99,17 @@ func LoggingWith(opts ...LoggingOption) gin.HandlerFunc {
 			fields["request_id"] = reqID
 		}
 
+		ctx := c.Request.Context()
+		if ExtractTraceID != nil {
+			if traceID := ExtractTraceID(ctx); traceID != "" {
+				fields["trace_id"] = traceID
+			}
+		}
+
 		if cfg.hook != nil {
 			cfg.hook(c, fields)
 		}
 
-		ctx := c.Request.Context()
 		args := mapToSlice(fields)
 
 		switch {

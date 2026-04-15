@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-quix 是基于 Gin 的 Golang 快速开发框架，定位为薄封装。内置集成 Config/Log/Errors/Middleware/Transport 等基础设施组件，通过 Option 模式定制，提供合理的零配置默认值。支持通过 `protoc-gen-quix-gin` 插件从 protobuf IDL 自动生成 Gin 路由注册代码，通过 `protoc-gen-quix-errors` 插件从 proto enum 自动生成错误码常量和构造函数。
+quix 是基于 Gin 的 Golang 快速开发框架，定位为薄封装。内置集成 Config/Log/Errors/Middleware/Transport/Telemetry 等基础设施组件，通过 Option 模式定制，提供合理的零配置默认值。支持通过 `protoc-gen-quix-gin` 插件从 protobuf IDL 自动生成 Gin 路由注册代码，通过 `protoc-gen-quix-errors` 插件从 proto enum 自动生成错误码常量和构造函数。
 
 ## 开发命令
 
@@ -31,7 +31,8 @@ quix/
 ├── core/
 │   ├── errors/           # 结构化错误类型（Error + 预定义函数）
 │   ├── config/           # 配置加载（koanf）
-│   ├── log/              # 日志（Logger 接口、级别控制、slog 默认、可选 Zerolog/Zap 适配器、MockLogger）
+│   ├── log/              # 日志（Logger 接口、级别控制、slog 默认、可选 Zerolog/Zap 适配器）
+│   ├── telemetry/        # 可观测性（OpenTelemetry TracerProvider/MeterProvider 管理）
 │   └── transport/
 │       └── http/server/  # HTTP Server（嵌入 gin.Engine）+ Handler 包装 + 默认中间件
 │           └── middleware/  # Recovery、ResponseMiddleware、Logging
@@ -54,6 +55,7 @@ quix/
 - **写完代码必须格式化**: 每次 Write/Edit Go 文件后，必须执行 `go fmt ./...`
 - **完成一组任务后必须 lint**: 每完成一个任务组（如接口定义、实现、测试），必须执行 `golangci-lint run ./...`
 - **错误处理模式**: Handler 返回 error，由 `qhttp.Handler()` 包装为 gin.HandlerFunc，`ResponseMiddleware` 统一格式化 `{"error": {...}}` 响应
+- **可观测性**: 通过 `quix.WithTelemetry()` 启用 OpenTelemetry（Traces + Metrics），默认关闭。otelgin 中间件自动创建 span 和 HTTP 指标，Logging middleware 自动输出 trace_id 关联调用链
 
 ## protoc-gen-quix-gin 插件
 
@@ -92,7 +94,7 @@ cd examples/proto-demo && buf generate
 - HTTP: Gin
 - 日志: Logger 统一接口（`core/log` 包默认 Slog；`quix.New()` 默认 Zerolog；可选 Zap 适配器；支持 `NewWriter(io.Writer)` 零依赖适配器）
 - 配置: koanf
-- 指标/追踪: OpenTelemetry（可选）
+- 指标/追踪: OpenTelemetry（可选，`core/telemetry` 包，otelgin 中间件，OTLP exporter）
 - IDL: protobuf + `google.api.http` 注解
 - 测试: testify（断言）、go-cmp（diff）、Golden File（插件测试）
 - Go 版本: 1.25

@@ -10,8 +10,10 @@ import (
 
 	"github.com/fztcjjl/quix/core/config"
 	"github.com/fztcjjl/quix/core/log"
+	"github.com/fztcjjl/quix/core/telemetry"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
+	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
@@ -21,11 +23,15 @@ const shutdownTimeout = 5 * time.Second
 
 // App is the core framework application.
 type App struct {
-	httpServer        *qhttp.Server
-	rpcServer         transport.Server
-	logger            log.Logger
-	config            config.Config
-	defaultMiddleware bool
+	httpServer             *qhttp.Server
+	rpcServer              transport.Server
+	logger                 log.Logger
+	config                 config.Config
+	defaultMiddleware      bool
+	telemetryOpts          []telemetry.Option
+	telemetryShutdown      func(context.Context) error
+	telemetryServiceName   string
+	telemetryTracesEnabled bool
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -55,6 +61,26 @@ func New(opts ...Option) *App {
 	for _, opt := range opts {
 		opt(app)
 	}
+	// Initialize telemetry if WithTelemetry was provided
+	if len(app.telemetryOpts) > 0 {
+		shutdown, err := telemetry.Init(context.Background(), app.telemetryOpts...)
+		if err != nil {
+			panic(fmt.Sprintf("telemetry init failed: %v", err))
+		}
+		app.telemetryShutdown = shutdown
+		// Enable trace_id in logging middleware
+		middleware.ExtractTraceID = telemetry.ExtractTraceID
+		// Resolve telemetry config for Server middleware injection
+		cfg := &telemetry.Config{
+			ServiceName:   "unknown_service",
+			TracesEnabled: true,
+		}
+		for _, opt := range app.telemetryOpts {
+			opt(cfg)
+		}
+		app.telemetryServiceName = cfg.ServiceName
+		app.telemetryTracesEnabled = cfg.TracesEnabled
+	}
 	// Config-driven server creation:
 	// - If http is configured (http.addr or http.port), start HTTP server
 	// - If rpc is configured (rpc.addr), start RPC server
@@ -63,7 +89,15 @@ func New(opts ...Option) *App {
 	hasRpcConfig := app.config.String("rpc.addr") != ""
 
 	if app.httpServer == nil && (hasHttpConfig || !hasRpcConfig) {
-		app.httpServer = qhttp.NewServer(qhttp.WithAddr(resolveHttpAddr(app.config)))
+		var serverOpts []qhttp.Option
+		serverOpts = append(serverOpts, qhttp.WithAddr(resolveHttpAddr(app.config)))
+		if len(app.telemetryOpts) > 0 {
+			serverOpts = append(serverOpts,
+				qhttp.WithTelemetryServiceName(app.telemetryServiceName),
+				qhttp.WithTelemetryTracesEnabled(app.telemetryTracesEnabled),
+			)
+		}
+		app.httpServer = qhttp.NewServer(serverOpts...)
 	}
 	// TODO: create RPC server when RPC transport is implemented
 	// if app.rpcServer == nil && hasRpcConfig { ... }
@@ -142,6 +176,16 @@ func (a *App) Shutdown(ctx context.Context) error {
 		if err := a.httpServer.Stop(ctx); err != nil {
 			return err
 		}
+	}
+	// Flush telemetry providers after servers stop
+	if a.telemetryShutdown != nil {
+		if err := a.telemetryShutdown(ctx); err != nil {
+			return err
+		}
+	}
+	// Close logger last
+	if a.logger != nil {
+		_ = a.logger.Close()
 	}
 	return nil
 }

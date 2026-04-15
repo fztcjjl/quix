@@ -9,6 +9,7 @@ import (
 	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // Server implements transport.Server for HTTP using Gin.
@@ -22,9 +23,11 @@ type Server struct {
 type Option func(*options)
 
 type options struct {
-	addr              string
-	defaultMiddleware bool
-	readHeaderTimeout time.Duration
+	addr                   string
+	defaultMiddleware      bool
+	readHeaderTimeout      time.Duration
+	telemetryServiceName   string
+	telemetryTracesEnabled bool
 }
 
 // WithAddr sets the server listen address.
@@ -48,6 +51,20 @@ func WithReadHeaderTimeout(d time.Duration) Option {
 	}
 }
 
+// WithTelemetryServiceName sets the service name for otelgin middleware.
+func WithTelemetryServiceName(name string) Option {
+	return func(o *options) {
+		o.telemetryServiceName = name
+	}
+}
+
+// WithTelemetryTracesEnabled controls whether otelgin middleware is injected.
+func WithTelemetryTracesEnabled(enabled bool) Option {
+	return func(o *options) {
+		o.telemetryTracesEnabled = enabled
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
 	o := &options{
@@ -67,7 +84,11 @@ func NewServer(opts ...Option) *Server {
 	}
 
 	if o.defaultMiddleware {
-		engine.Use(middleware.Recovery(), requestid.New(), middleware.Logging(), middleware.ResponseMiddleware())
+		engine.Use(middleware.Recovery())
+		if o.telemetryServiceName != "" && o.telemetryTracesEnabled {
+			engine.Use(otelgin.Middleware(o.telemetryServiceName))
+		}
+		engine.Use(requestid.New(), middleware.Logging(), middleware.ResponseMiddleware())
 	}
 
 	return s
