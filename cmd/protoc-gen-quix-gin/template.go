@@ -13,15 +13,15 @@ var httpTemplate string
 // parsedTemplate is the parsed Go template for generating Gin HTTP code.
 var parsedTemplate = template.Must(
 	template.New("http").Funcs(template.FuncMap{
-		"runtimePkg":  runtimeImportPath,
+		"serverPkg":   serverImportPath,
 		"exportField": exportField,
 		"trimPrefix":  strings.TrimPrefix,
 	}).Parse(httpTemplate),
 )
 
-// runtimeImportPath returns the Go import path for the runtime package.
-func runtimeImportPath() string {
-	return "github.com/fztcjjl/quix/internal/protoc-gen-quix-gin/runtime"
+// serverImportPath returns the Go import path for the server package.
+func serverImportPath() string {
+	return "github.com/fztcjjl/quix/core/transport/http/server"
 }
 
 // exportField converts a proto field name (snake_case) to Go exported name (PascalCase).

@@ -8,7 +8,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/fztcjjl/quix/internal/protoc-gen-quix-gin/runtime"
+	runtime "github.com/fztcjjl/quix/core/transport/http/server"
 )
 
 // GreeterHTTPService is the HTTP service interface for Greeter.

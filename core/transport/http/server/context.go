@@ -1,8 +1,7 @@
-package runtime
+package server
 
 import (
 	apperrors "github.com/fztcjjl/quix/core/errors"
-	"github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/gin-gonic/gin"
 )
 
@@ -13,9 +12,9 @@ type Context struct {
 }
 
 // SetError stores an error in the gin context and aborts the request.
-// It delegates to server.SetAppError for consistent error handling.
+// It delegates to SetAppError for consistent error handling.
 func (c *Context) SetError(err error) {
-	server.SetAppError(c.Context, err)
+	SetAppError(c.Context, err)
 }
 
 // GetError retrieves the stored error from the gin context.
