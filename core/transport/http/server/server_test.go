@@ -61,7 +61,7 @@ func TestServerRouting(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
@@ -81,7 +81,7 @@ func TestServerMiddleware(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if !called {
 		t.Error("middleware was not called")
@@ -97,7 +97,7 @@ func TestServerGroup(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/api/health", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
@@ -117,7 +117,7 @@ func TestServerAllMethods(t *testing.T) {
 	for _, m := range methods {
 		req, _ := http.NewRequest(m, "/r", nil)
 		w := httptest.NewRecorder()
-		s.Engine.ServeHTTP(w, req)
+		s.ServeHTTP(w, req)
 		if w.Code != http.StatusOK {
 			t.Errorf("method %s: expected 200, got %d", m, w.Code)
 		}
@@ -134,7 +134,7 @@ func TestServerDefaultMiddleware(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/panic", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500 (recovered), got %d", w.Code)
@@ -150,7 +150,7 @@ func TestServerDisableDefaultMiddleware(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ok", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)
@@ -166,7 +166,7 @@ func TestServerDefaultMiddlewareErrorFormat(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/notfound", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("expected 404, got %d", w.Code)
@@ -195,7 +195,7 @@ func TestServerDefaultMiddlewareStandardError(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/internal", nil)
-	s.Engine.ServeHTTP(w, req)
+	s.ServeHTTP(w, req)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)

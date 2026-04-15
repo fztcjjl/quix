@@ -85,7 +85,7 @@ func TestAppRouteProxy(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/ping", nil)
-	app.httpServer.Engine.ServeHTTP(w, req)
+	app.httpServer.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d", w.Code)

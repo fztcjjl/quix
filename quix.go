@@ -2,7 +2,9 @@ package quix
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -21,17 +23,60 @@ import (
 // shutdownTimeout is the maximum duration for graceful shutdown.
 const shutdownTimeout = 5 * time.Second
 
+// Environment represents the application deployment environment.
+type Environment string
+
+const (
+	// EnvDev is the local development environment.
+	EnvDev Environment = "dev"
+	// EnvTest is the CI/testing environment.
+	EnvTest Environment = "test"
+	// EnvStaging is the pre-production environment.
+	EnvStaging Environment = "staging"
+	// EnvProd is the production environment.
+	EnvProd Environment = "prod"
+)
+
+// resolveEnv reads QUIX_ENV from the environment.
+// Defaults to EnvDev. Unknown values are treated as EnvProd (safe default).
+func resolveEnv() Environment {
+	env := os.Getenv("QUIX_ENV")
+	if env == "" {
+		return EnvDev
+	}
+	switch Environment(env) {
+	case EnvDev, EnvTest, EnvStaging, EnvProd:
+		return Environment(env)
+	default:
+		return EnvProd
+	}
+}
+
+// ginModeForEnv returns the Gin mode for the given environment.
+func ginModeForEnv(env Environment) string {
+	switch env {
+	case EnvDev:
+		return gin.DebugMode
+	case EnvTest:
+		return gin.TestMode
+	default:
+		return gin.ReleaseMode
+	}
+}
+
 // App is the core framework application.
 type App struct {
 	httpServer             *qhttp.Server
 	rpcServer              transport.Server
 	logger                 log.Logger
 	config                 config.Config
+	env                    Environment
 	defaultMiddleware      bool
 	telemetryOpts          []telemetry.Option
 	telemetryShutdown      func(context.Context) error
 	telemetryServiceName   string
 	telemetryTracesEnabled bool
+	setupFuncs             []func(*App) error
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -48,16 +93,26 @@ func resolveHttpAddr(c config.Config) string {
 }
 
 // New creates a new App with the given options.
-// If no logger is provided, zerolog is used by default.
+// If no logger is provided, zerolog is used by default with format driven by QUIX_ENV.
 // If no config is provided, koanf with environment variables is used by default.
 func New(opts ...Option) *App {
-	defaultLog := log.NewZerolog(zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).With().Timestamp().Logger())
+	env := resolveEnv()
+	// Default logger format driven by environment
+	var logOutput io.Writer = os.Stderr
+	if env == EnvDev {
+		logOutput = zerolog.ConsoleWriter{Out: os.Stderr}
+	}
+	defaultLog := log.NewZerolog(zerolog.New(logOutput).With().Timestamp().Logger())
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
 		logger: defaultLog,
 		config: defaultCfg,
+		env:    env,
 	}
 	log.SetDefault(defaultLog)
+	// Auto-set Gin mode from environment; user options can override via WithGinMode
+	gin.SetMode(ginModeForEnv(app.env))
+	// Apply user options
 	for _, opt := range opts {
 		opt(app)
 	}
@@ -65,15 +120,16 @@ func New(opts ...Option) *App {
 	if len(app.telemetryOpts) > 0 {
 		shutdown, err := telemetry.Init(context.Background(), app.telemetryOpts...)
 		if err != nil {
-			panic(fmt.Sprintf("telemetry init failed: %v", err))
+			app.logger.Warn(context.Background(), "telemetry init failed, running without telemetry", "error", err)
+		} else {
+			app.telemetryShutdown = shutdown
+			// Enable trace_id in logging middleware
+			middleware.ExtractTraceID = telemetry.ExtractTraceID
 		}
-		app.telemetryShutdown = shutdown
-		// Enable trace_id in logging middleware
-		middleware.ExtractTraceID = telemetry.ExtractTraceID
 		// Resolve telemetry config for Server middleware injection
 		cfg := &telemetry.Config{
 			ServiceName:   "unknown_service",
-			TracesEnabled: true,
+			TracesEnabled: err == nil,
 		}
 		for _, opt := range app.telemetryOpts {
 			opt(cfg)
@@ -121,6 +177,27 @@ func (a *App) HttpServer() *qhttp.Server {
 
 // Run starts all servers and blocks until shutdown.
 func (a *App) Run() {
+	// Output startup info log
+	telemetryStatus := "disabled"
+	if a.telemetryShutdown != nil {
+		telemetryStatus = "enabled"
+	}
+	a.logger.Info(context.Background(), "starting server",
+		"addr", resolveHttpAddr(a.config),
+		"env", string(a.env),
+		"gin_mode", gin.Mode(),
+		"telemetry", telemetryStatus)
+
+	// Execute WithSetup callbacks
+	for _, fn := range a.setupFuncs {
+		if err := fn(a); err != nil {
+			a.logger.Error(context.Background(), "setup callback failed",
+				"error", err)
+			os.Exit(1)
+		}
+	}
+
+	// Start servers
 	if a.httpServer != nil {
 		go func() {
 			if err := a.httpServer.Start(); err != nil {
@@ -138,8 +215,7 @@ func (a *App) Run() {
 		}()
 	}
 
-	a.logger.Info(context.Background(), "server started")
-
+	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -148,18 +224,9 @@ func (a *App) Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	// Stop RPC server first, then HTTP server
-	if a.rpcServer != nil {
-		if err := a.rpcServer.Stop(ctx); err != nil {
-			a.logger.Error(context.Background(), "rpc server failed to stop",
-				"error", fmt.Sprintf("%v", err))
-		}
-	}
-	if a.httpServer != nil {
-		if err := a.httpServer.Stop(ctx); err != nil {
-			a.logger.Error(context.Background(), "http server failed to stop",
-				"error", fmt.Sprintf("%v", err))
-		}
+	if err := a.Shutdown(ctx); err != nil {
+		a.logger.Error(context.Background(), "shutdown failed",
+			"error", fmt.Sprintf("%v", err))
 	}
 
 	a.logger.Info(context.Background(), "server exited")
@@ -167,27 +234,39 @@ func (a *App) Run() {
 
 // Shutdown gracefully shuts down all servers.
 func (a *App) Shutdown(ctx context.Context) error {
+	var errs []error
+
 	if a.rpcServer != nil {
+		a.logger.Info(ctx, "stopping rpc server...")
 		if err := a.rpcServer.Stop(ctx); err != nil {
-			return err
+			a.logger.Error(ctx, "rpc server failed to stop", "error", err)
+			errs = append(errs, err)
 		}
 	}
 	if a.httpServer != nil {
+		a.logger.Info(ctx, "stopping http server...")
 		if err := a.httpServer.Stop(ctx); err != nil {
-			return err
+			a.logger.Error(ctx, "http server failed to stop", "error", err)
+			errs = append(errs, err)
 		}
 	}
 	// Flush telemetry providers after servers stop
 	if a.telemetryShutdown != nil {
+		a.logger.Info(ctx, "flushing telemetry...")
 		if err := a.telemetryShutdown(ctx); err != nil {
-			return err
+			a.logger.Warn(ctx, "telemetry flush failed", "error", err)
+			errs = append(errs, err)
 		}
 	}
 	// Close logger last
 	if a.logger != nil {
-		_ = a.logger.Close()
+		a.logger.Info(ctx, "closing logger...")
+		if err := a.logger.Close(); err != nil {
+			a.logger.Error(ctx, "logger close failed", "error", err)
+			errs = append(errs, err)
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // HTTP routing proxy methods

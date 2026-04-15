@@ -7,8 +7,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/gin-gonic/gin"
 	"github.com/fztcjjl/quix/internal/protoc-gen-quix-gin/runtime"
+	"github.com/gin-gonic/gin"
 )
 
 // TaskServiceHTTPService is the HTTP service interface for TaskService.

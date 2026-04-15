@@ -43,9 +43,17 @@ func WithRpcServer(s transport.Server) Option {
 }
 
 // WithGinMode sets the Gin mode (debug, release, test).
+// This overrides the automatic Gin mode derived from QUIX_ENV.
 func WithGinMode(mode string) Option {
 	return func(a *App) {
 		gin.SetMode(mode)
+	}
+}
+
+// WithEnv sets the application environment, overriding QUIX_ENV.
+func WithEnv(env Environment) Option {
+	return func(a *App) {
+		a.env = env
 	}
 }
 
@@ -62,5 +70,14 @@ func WithDefaultMiddleware(enabled bool) Option {
 func WithTelemetry(opts ...telemetry.Option) Option {
 	return func(a *App) {
 		a.telemetryOpts = opts
+	}
+}
+
+// WithSetup registers startup callbacks that run before the HTTP server starts.
+// Callbacks execute in registration order. If a callback returns an error,
+// the app logs the error and exits with code 1.
+func WithSetup(funcs ...func(*App) error) Option {
+	return func(a *App) {
+		a.setupFuncs = append(a.setupFuncs, funcs...)
 	}
 }
