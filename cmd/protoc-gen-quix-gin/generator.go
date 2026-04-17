@@ -87,11 +87,13 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 				}
 
 				// Warn when body "*" and path variables share names with input message fields
+				pathVarConflict := false
 				if binding.Body == "*" {
 					pathVars := ExtractPathVars(binding.Path)
 					for _, pv := range pathVars {
 						for _, field := range method.Input.Fields {
 							if string(field.Desc.Name()) == pv {
+								pathVarConflict = true
 								bindWarnf("method %s.%s: path variable %q has same name as body field, potential conflict; "+
 									"consider using body: \"<field>\" to specify the body field explicitly",
 									svc.GoName, method.GoName, pv)
@@ -102,12 +104,13 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 				}
 
 				route := RouteData{
-					Method:      binding.Method,
-					Path:        ConvertPath(binding.Path),
-					HandlerName: fmt.Sprintf("_%s_%s%d_HTTP_Handler", svc.GoName, method.GoName, i),
-					HasBody:     binding.Body != "",
-					BodyField:   binding.Body,
-					PathVars:    ExtractPathVars(binding.Path),
+					Method:          binding.Method,
+					Path:            ConvertPath(binding.Path),
+					HandlerName:     fmt.Sprintf("_%s_%s%d_HTTP_Handler", svc.GoName, method.GoName, i),
+					HasBody:         binding.Body != "",
+					BodyField:       binding.Body,
+					PathVars:        ExtractPathVars(binding.Path),
+					PathVarConflict: pathVarConflict,
 				}
 				methodData.Routes = append(methodData.Routes, route)
 			}

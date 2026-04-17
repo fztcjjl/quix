@@ -54,12 +54,13 @@ func toPascalCase(s string) string {
 
 // RouteData holds information about a single HTTP route binding.
 type RouteData struct {
-	Method      string // GET, POST, PUT, DELETE, PATCH
-	Path        string // Gin-style path with :var
-	HandlerName string // _Service_MethodN_HTTP_Handler
-	HasBody     bool   // Whether the route has a request body
-	BodyField   string // Body field name ("*" means entire message, "" means no body)
-	PathVars    []string
+	Method          string // GET, POST, PUT, DELETE, PATCH
+	Path            string // Gin-style path with :var
+	HandlerName     string // _Service_MethodN_HTTP_Handler
+	HasBody         bool   // Whether the route has a request body
+	BodyField       string // Body field name ("*" means entire message, "" means no body)
+	PathVars        []string
+	PathVarConflict bool // true when a path variable name matches an input message field name
 }
 
 // MethodData holds information about a proto method.

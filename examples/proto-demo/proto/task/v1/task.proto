@@ -6,6 +6,7 @@ option go_package = "github.com/fztcjjl/quix/examples/proto-demo/gen/task/v1;tas
 
 import "google/api/annotations.proto";
 import "errors/errors.proto";
+import "buf/validate/validate.proto";
 
 // Task represents a task item.
 message Task {
@@ -54,11 +55,14 @@ service TaskService {
 }
 
 message CreateTaskRequest {
-  string title = 1;
+  string title = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
 }
 
 message GetTaskRequest {
-  string task_id = 1;
+  string task_id = 1 [(buf.validate.field).string.min_len = 1];
 }
 
 message ListTasksRequest {}
@@ -68,5 +72,5 @@ message TaskList {
 }
 
 message DeleteTaskRequest {
-  string task_id = 1;
+  string task_id = 1 [(buf.validate.field).string.min_len = 1];
 }

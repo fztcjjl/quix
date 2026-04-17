@@ -4,3 +4,4 @@ modules:
 deps:
   - buf.build/fztcjjl/quix
   - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate

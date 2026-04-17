@@ -144,12 +144,27 @@ main.go SHALL 对 ParamFunc 和 fallback 参数解析分别添加注释，说明
 - **THEN** MUST 正常生成代码，不输出警告
 
 ### Requirement: body 星号有路径变量的模板分支
-当 `body: "*"` 且路径包含变量时，插件 SHALL 在生成的 handler 中先调用 `ShouldBindJSON(req)`，再调用 `ShouldBindUriConflictCheck(req, pathVars)` 进行运行时冲突检测和 URI 绑定。
+当 `body: "*"` 且路径包含变量时，插件 SHALL 根据编译期同名检测结果选择不同的 URI 绑定方式：同名 → `ShouldBindUriConflictCheck`，不同名 → `ShouldBindUri`。
 
-#### Scenario: body 星号有路径变量
+#### Scenario: 路径变量名与 body 字段同名
+- **WHEN** `google.api.http` 注解使用 `post: "/agents/{id}" body: "*"` 且 input message 包含 `string id` 字段
+- **THEN** 生成的 handler MUST 先调用 `ShouldBindJSON(req)`，再调用 `ShouldBindUriConflictCheck(req, pathVars)`
+
+#### Scenario: 路径变量名与 body 字段不同名
 - **WHEN** `google.api.http` 注解使用 `post: "/agents/{agent_id}" body: "*"` 且 input message 无 `agent_id` 字段
-- **THEN** 生成的 handler MUST 先调用 `ShouldBindJSON(req)`，再调用 `ShouldBindUriConflictCheck(req, []string{"agent_id"})`
+- **THEN** 生成的 handler MUST 先调用 `ShouldBindJSON(req)`，再调用 `ShouldBindUri(req)`
 
 #### Scenario: body 星号无路径变量
 - **WHEN** `google.api.http` 注解使用 `post: "/agents" body: "*"`
 - **THEN** 生成的 handler MUST 只调用 `ShouldBindJSON(req)`（行为不变）
+
+### Requirement: 请求绑定后的校验调用
+生成的 handler SHALL 在 `shouldBind(req)` 成功后、调用 service 方法前，调用 `runtime.ValidateRequest(req)` 进行字段校验。
+
+#### Scenario: 正常请求
+- **WHEN** shouldBind 成功，ValidateRequest 返回 nil
+- **THEN** MUST 继续调用 service 方法
+
+#### Scenario: 校验失败
+- **WHEN** shouldBind 成功，ValidateRequest 返回错误
+- **THEN** MUST 调用 `c.SetError(err)` 并 return，不调用 service 方法

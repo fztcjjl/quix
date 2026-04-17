@@ -51,6 +51,10 @@ func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		rsp, err = svc.SayHello(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -77,6 +81,10 @@ func _Greeter_CreateUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 		req := new(CreateUserRequest)
 		var rsp *UserResponse
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}
@@ -116,6 +124,10 @@ func _Greeter_UpdateUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		rsp, err = svc.UpdateUser(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -147,6 +159,10 @@ func _Greeter_DeleteUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		_, err = svc.DeleteUser(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -172,6 +188,10 @@ func _Greeter_SearchUsers0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc 
 		req := new(SearchUsersRequest)
 		var rsp *UserListResponse
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}
@@ -204,6 +224,10 @@ func _Greeter_SearchUsers1_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc 
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		rsp, err = svc.SearchUsers(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -224,7 +248,7 @@ func _Greeter_AddItemToUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFun
 			if err := c.ShouldBindJSON(req); err != nil {
 				return err
 			}
-			if err := c.ShouldBindUriConflictCheck(req, []string{"user_id"}); err != nil {
+			if err := c.ShouldBindUri(req); err != nil {
 				return err
 			}
 			return nil
@@ -233,6 +257,10 @@ func _Greeter_AddItemToUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFun
 		req := new(AddItemRequest)
 		var rsp *ItemResponse
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}

@@ -41,8 +41,12 @@ func _{{$svc.GoName}}_{{$method.GoName}}{{$ri}}_HTTP_Handler(svc {{$svc.Interfac
 			if err := c.ShouldBindJSON(req); err != nil {
 				return err
 			}
-			{{- if $route.PathVars}}
+			{{- if and $route.PathVars $route.PathVarConflict}}
 			if err := c.ShouldBindUriConflictCheck(req, []string{ {{range $i, $v := $route.PathVars}}{{if $i}}, {{end}}"{{$v}}"{{end}} }); err != nil {
+				return err
+			}
+			{{- else if and $route.PathVars (not $route.PathVarConflict)}}
+			if err := c.ShouldBindUri(req); err != nil {
 				return err
 			}
 			{{- end}}
@@ -75,6 +79,10 @@ func _{{$svc.GoName}}_{{$method.GoName}}{{$ri}}_HTTP_Handler(svc {{$svc.Interfac
 		var rsp {{$method.OutputType}}
 		{{- end}}
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}
