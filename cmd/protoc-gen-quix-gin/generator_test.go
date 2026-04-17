@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -175,6 +176,14 @@ func buildTestProtoFile() *descriptorpb.FileDescriptorProto {
 		},
 	})
 
+	addItemOpts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(addItemOpts, annotations.E_Http, &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Post{
+			Post: "/users/{user_id}/items",
+		},
+		Body: "*",
+	})
+
 	return &descriptorpb.FileDescriptorProto{
 		Name:    proto.String("testdata/test.proto"),
 		Package: proto.String("test"),
@@ -248,6 +257,20 @@ func buildTestProtoFile() *descriptorpb.FileDescriptorProto {
 					{Name: proto.String("total"), Number: proto.Int32(2), Type: int32Type(), Label: optionalField()},
 				},
 			},
+			{
+				Name: proto.String("AddItemRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("title"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+					{Name: proto.String("quantity"), Number: proto.Int32(2), Type: int32Type(), Label: optionalField()},
+				},
+			},
+			{
+				Name: proto.String("ItemResponse"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("id"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+					{Name: proto.String("title"), Number: proto.Int32(2), Type: stringType(), Label: optionalField()},
+				},
+			},
 		},
 		Service: []*descriptorpb.ServiceDescriptorProto{
 			{
@@ -283,8 +306,284 @@ func buildTestProtoFile() *descriptorpb.FileDescriptorProto {
 						OutputType: proto.String(".test.UserListResponse"),
 						Options:    searchUsersOpts,
 					},
+					{
+						Name:       proto.String("AddItemToUser"),
+						InputType:  proto.String(".test.AddItemRequest"),
+						OutputType: proto.String(".test.ItemResponse"),
+						Options:    addItemOpts,
+					},
 				},
 			},
 		},
+	}
+}
+
+// helper to run generateFile and capture plugin error + stderr output
+func runGenerate(t *testing.T, protoFile *descriptorpb.FileDescriptorProto) (*pluginpb.CodeGeneratorResponse, string) {
+	t.Helper()
+
+	protoFiles := []*descriptorpb.FileDescriptorProto{
+		protodesc.ToFileDescriptorProto(descriptorpb.File_google_protobuf_descriptor_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_http_proto),
+		protodesc.ToFileDescriptorProto(annotations.File_google_api_annotations_proto),
+		protodesc.ToFileDescriptorProto(emptypb.File_google_protobuf_empty_proto),
+		protoFile,
+	}
+
+	req := &pluginpb.CodeGeneratorRequest{
+		Parameter:      proto.String("Mgoogle/protobuf/descriptor.proto=google.golang.org/protobuf/types/descriptorpb,Mgoogle/protobuf/empty.proto=google.golang.org/protobuf/types/known/emptypb"),
+		ProtoFile:      protoFiles,
+		FileToGenerate: []string{protoFile.GetName()},
+	}
+
+	// Capture stderr for warnings
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	plugin, err := (&protogen.Options{}).New(req)
+	if err != nil {
+		t.Fatalf("protogen.Options.New() failed: %v", err)
+	}
+
+	for _, file := range plugin.Files {
+		if !file.Generate {
+			continue
+		}
+		generateFile(plugin, file)
+	}
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	var stderrOutput string
+	buf := make([]byte, 4096)
+	n, _ := r.Read(buf)
+	if n > 0 {
+		stderrOutput = string(buf[:n])
+	}
+
+	return plugin.Response(), stderrOutput
+}
+
+func TestGenerate_GetWithBody_Error(t *testing.T) {
+	opts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Get{
+			Get: "/hello/{name}",
+		},
+		Body: "*",
+	})
+
+	protoFile := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test_error.proto"),
+		Package: proto.String("test"),
+		Syntax:  proto.String("proto3"),
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("test/test;test"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("HelloRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("name"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+			{
+				Name: proto.String("HelloReply"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("message"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Greeter"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("SayHello"),
+						InputType:  proto.String(".test.HelloRequest"),
+						OutputType: proto.String(".test.HelloReply"),
+						Options:    opts,
+					},
+				},
+			},
+		},
+	}
+
+	resp, _ := runGenerate(t, protoFile)
+	if resp.GetError() == "" {
+		t.Fatal("expected plugin error for GET with body, got none")
+	}
+	if !strings.Contains(resp.GetError(), "GET must not have a body") {
+		t.Errorf("error message should mention GET body violation, got: %s", resp.GetError())
+	}
+}
+
+func TestGenerate_DeleteWithBody_Error(t *testing.T) {
+	opts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Delete{
+			Delete: "/users/{user_id}",
+		},
+		Body: "*",
+	})
+
+	protoFile := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test_delete_body.proto"),
+		Package: proto.String("test"),
+		Syntax:  proto.String("proto3"),
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("test/test;test"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("DeleteUserRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("user_id"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+			{
+				Name: proto.String("Empty"),
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Greeter"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("DeleteUser"),
+						InputType:  proto.String(".test.DeleteUserRequest"),
+						OutputType: proto.String(".test.Empty"),
+						Options:    opts,
+					},
+				},
+			},
+		},
+	}
+
+	resp, _ := runGenerate(t, protoFile)
+	if resp.GetError() == "" {
+		t.Fatal("expected plugin error for DELETE with body, got none")
+	}
+	if !strings.Contains(resp.GetError(), "DELETE must not have a body") {
+		t.Errorf("error message should mention DELETE body violation, got: %s", resp.GetError())
+	}
+}
+
+func TestGenerate_BodyStarPathVarSameName_Warn(t *testing.T) {
+	opts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Post{
+			Post: "/agents/{id}",
+		},
+		Body: "*",
+	})
+
+	protoFile := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test_warn.proto"),
+		Package: proto.String("test"),
+		Syntax:  proto.String("proto3"),
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("test/test;test"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("AgentRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("id"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+					{Name: proto.String("name"), Number: proto.Int32(2), Type: stringType(), Label: optionalField()},
+				},
+			},
+			{
+				Name: proto.String("AgentResponse"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("id"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Agent"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("CreateAgent"),
+						InputType:  proto.String(".test.AgentRequest"),
+						OutputType: proto.String(".test.AgentResponse"),
+						Options:    opts,
+					},
+				},
+			},
+		},
+	}
+
+	resp, stderr := runGenerate(t, protoFile)
+	// Should NOT be an error — warning should not stop generation
+	if resp.GetError() != "" {
+		t.Fatalf("expected no plugin error for warning case, got: %s", resp.GetError())
+	}
+	if len(resp.File) == 0 {
+		t.Fatal("expected generated output file, got none")
+	}
+	// Should have warning on stderr
+	if !strings.Contains(stderr, "warning:") {
+		t.Errorf("expected warning on stderr, got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "same name as body field") {
+		t.Errorf("warning should mention same name conflict, got: %s", stderr)
+	}
+}
+
+func TestGenerate_BodyStarPathVarDifferentName_NoWarn(t *testing.T) {
+	opts := &descriptorpb.MethodOptions{}
+	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
+		Pattern: &annotations.HttpRule_Post{
+			Post: "/users/{user_id}/items",
+		},
+		Body: "*",
+	})
+
+	protoFile := &descriptorpb.FileDescriptorProto{
+		Name:    proto.String("test_no_warn.proto"),
+		Package: proto.String("test"),
+		Syntax:  proto.String("proto3"),
+		Options: &descriptorpb.FileOptions{
+			GoPackage: proto.String("test/test;test"),
+		},
+		MessageType: []*descriptorpb.DescriptorProto{
+			{
+				Name: proto.String("CreateItemRequest"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("title"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+			{
+				Name: proto.String("ItemResponse"),
+				Field: []*descriptorpb.FieldDescriptorProto{
+					{Name: proto.String("id"), Number: proto.Int32(1), Type: stringType(), Label: optionalField()},
+				},
+			},
+		},
+		Service: []*descriptorpb.ServiceDescriptorProto{
+			{
+				Name: proto.String("Item"),
+				Method: []*descriptorpb.MethodDescriptorProto{
+					{
+						Name:       proto.String("CreateItem"),
+						InputType:  proto.String(".test.CreateItemRequest"),
+						OutputType: proto.String(".test.ItemResponse"),
+						Options:    opts,
+					},
+				},
+			},
+		},
+	}
+
+	resp, stderr := runGenerate(t, protoFile)
+	if resp.GetError() != "" {
+		t.Fatalf("expected no plugin error, got: %s", resp.GetError())
+	}
+	if strings.Contains(stderr, "warning:") {
+		t.Errorf("expected no warning for different names, got: %s", stderr)
 	}
 }

@@ -79,6 +79,28 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 					}
 				}
 
+				// GET and DELETE must not have a body (HTTP semantic violation)
+				if (binding.Method == "GET" || binding.Method == "DELETE") && binding.Body != "" {
+					bindErrorf(plugin, "method %s.%s: %s must not have a body",
+						svc.GoName, method.GoName, binding.Method)
+					return
+				}
+
+				// Warn when body "*" and path variables share names with input message fields
+				if binding.Body == "*" {
+					pathVars := ExtractPathVars(binding.Path)
+					for _, pv := range pathVars {
+						for _, field := range method.Input.Fields {
+							if string(field.Desc.Name()) == pv {
+								bindWarnf("method %s.%s: path variable %q has same name as body field, potential conflict; "+
+									"consider using body: \"<field>\" to specify the body field explicitly",
+									svc.GoName, method.GoName, pv)
+								break
+							}
+						}
+					}
+				}
+
 				route := RouteData{
 					Method:      binding.Method,
 					Path:        ConvertPath(binding.Path),

@@ -18,6 +18,7 @@ type GreeterHTTPService interface {
 	UpdateUser(context.Context, *UpdateUserRequest) (*UserResponse, error)
 	DeleteUser(context.Context, *DeleteUserRequest) error
 	SearchUsers(context.Context, *SearchUsersRequest) (*UserListResponse, error)
+	AddItemToUser(context.Context, *AddItemRequest) (*ItemResponse, error)
 }
 
 // RegisterGreeterHTTPService registers HTTP handlers for Greeter onto the given router group.
@@ -28,6 +29,7 @@ func RegisterGreeterHTTPService(g *gin.RouterGroup, svc GreeterHTTPService) {
 	g.DELETE("/users/:user_id", _Greeter_DeleteUser0_HTTP_Handler(svc))
 	g.GET("/users/search", _Greeter_SearchUsers0_HTTP_Handler(svc))
 	g.POST("/users/search", _Greeter_SearchUsers1_HTTP_Handler(svc))
+	g.POST("/users/:user_id/items", _Greeter_AddItemToUser0_HTTP_Handler(svc))
 }
 
 func _Greeter_SayHello0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
@@ -203,6 +205,38 @@ func _Greeter_SearchUsers1_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc 
 			return
 		}
 		rsp, err = svc.SearchUsers(c.Request.Context(), req)
+		if err != nil {
+			c.SetError(err)
+			return
+		}
+		if c.GetHeader("Accept") == "application/x-protobuf" {
+			c.ProtoBuf(http.StatusOK, rsp)
+		} else {
+			c.JSON(http.StatusOK, rsp)
+		}
+	}
+}
+
+func _Greeter_AddItemToUser0_HTTP_Handler(svc GreeterHTTPService) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		c := &runtime.Context{Context: ctx}
+		shouldBind := func(req *AddItemRequest) error {
+			if err := c.ShouldBindJSON(req); err != nil {
+				return err
+			}
+			if err := c.ShouldBindUriConflictCheck(req, []string{"user_id"}); err != nil {
+				return err
+			}
+			return nil
+		}
+		var err error
+		req := new(AddItemRequest)
+		var rsp *ItemResponse
+		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		rsp, err = svc.AddItemToUser(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
 			return

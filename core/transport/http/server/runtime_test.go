@@ -140,3 +140,111 @@ func TestShouldBindUri(t *testing.T) {
 	assert.Equal(t, "123", result.ID)
 	assert.Equal(t, "alice", result.Name)
 }
+
+func TestShouldBindUriConflictCheck_NoConflict(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	type testRequest struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	r := gin.New()
+	r.POST("/test/:id", func(c *gin.Context) {
+		ctx := &Context{Context: c}
+		var req testRequest
+		// Simulate: body didn't set id (zero value), URI should bind it
+		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, req)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test/123", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result testRequest
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	assert.Equal(t, "123", result.ID)
+}
+
+func TestShouldBindUriConflictCheck_ValueMatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	type testRequest struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	r := gin.New()
+	r.POST("/test/:id", func(c *gin.Context) {
+		ctx := &Context{Context: c}
+		var req testRequest
+		req.ID = "123" // set by JSON body, matches URI
+		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, req)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test/123", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var result testRequest
+	assert.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	assert.Equal(t, "123", result.ID)
+}
+
+func TestShouldBindUriConflictCheck_ValueMismatch(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	type testRequest struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+
+	r := gin.New()
+	r.POST("/test/:id", func(c *gin.Context) {
+		ctx := &Context{Context: c}
+		var req testRequest
+		req.ID = "999" // set by JSON body, conflicts with URI "123"
+		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, req)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test/123", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "conflicts with body field")
+}
+
+func TestShouldBindUriConflictCheck_NonStructPointer(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	r := gin.New()
+	r.POST("/test/:id", func(c *gin.Context) {
+		ctx := &Context{Context: c}
+		var s string
+		// Non-struct pointer — should return nil, no-op
+		err := ctx.ShouldBindUriConflictCheck(&s, []string{"id"})
+		assert.NoError(t, err)
+		c.Status(http.StatusOK)
+	})
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/test/123", nil)
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+}

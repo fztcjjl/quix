@@ -48,6 +48,14 @@ service Greeter {
       }
     };
   }
+
+  // POST with body "*" and path variable (different name from body fields)
+  rpc AddItemToUser (AddItemRequest) returns (ItemResponse) {
+    option (google.api.http) = {
+      post: "/users/{user_id}/items"
+      body: "*"
+    };
+  }
 }
 
 message HelloRequest {
@@ -91,4 +99,14 @@ message SearchUsersRequest {
 message UserListResponse {
   repeated UserResponse users = 1;
   int32 total = 2;
+}
+
+message AddItemRequest {
+  string title = 1;
+  int32 quantity = 2;
+}
+
+message ItemResponse {
+  string id = 1;
+  string title = 2;
 }

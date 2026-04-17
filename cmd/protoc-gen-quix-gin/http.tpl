@@ -41,6 +41,11 @@ func _{{$svc.GoName}}_{{$method.GoName}}{{$ri}}_HTTP_Handler(svc {{$svc.Interfac
 			if err := c.ShouldBindJSON(req); err != nil {
 				return err
 			}
+			{{- if $route.PathVars}}
+			if err := c.ShouldBindUriConflictCheck(req, []string{ {{range $i, $v := $route.PathVars}}{{if $i}}, {{end}}"{{$v}}"{{end}} }); err != nil {
+				return err
+			}
+			{{- end}}
 			{{- end}}
 			{{- if and $route.HasBody (ne $route.BodyField "*")}}
 			if err := c.ShouldBindQuery(req); err != nil {
