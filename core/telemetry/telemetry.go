@@ -4,6 +4,7 @@ package telemetry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/otel"
@@ -75,9 +76,10 @@ func WithStdoutExporter(enabled bool) Option {
 	return func(c *Config) { c.StdoutExporter = enabled }
 }
 
-// Init initializes OTel providers and returns a unified shutdown function.
+// Init initializes OTel providers and returns a unified shutdown function
+// and the resolved config (e.g., ServiceName, TracesEnabled).
 // The shutdown func flushes all providers in order: MeterProvider, TracerProvider.
-func Init(ctx context.Context, opts ...Option) (func(context.Context) error, error) {
+func Init(ctx context.Context, opts ...Option) (*Config, func(context.Context) error, error) {
 	cfg := &Config{
 		ServiceName:      "unknown_service",
 		ExporterEndpoint: "localhost:4317",
@@ -90,7 +92,7 @@ func Init(ctx context.Context, opts ...Option) (func(context.Context) error, err
 
 	res, err := newResource(ctx, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("telemetry: create resource: %w", err)
+		return nil, nil, fmt.Errorf("telemetry: create resource: %w", err)
 	}
 
 	var (
@@ -101,7 +103,7 @@ func Init(ctx context.Context, opts ...Option) (func(context.Context) error, err
 	if cfg.TracesEnabled {
 		tp, err := newTracerProvider(ctx, res, cfg)
 		if err != nil {
-			return nil, fmt.Errorf("telemetry: create tracer provider: %w", err)
+			return nil, nil, fmt.Errorf("telemetry: create tracer provider: %w", err)
 		}
 		tracerProvider = tp
 		otel.SetTracerProvider(tp)
@@ -114,7 +116,7 @@ func Init(ctx context.Context, opts ...Option) (func(context.Context) error, err
 			if tracerProvider != nil {
 				_ = tracerProvider.Shutdown(ctx)
 			}
-			return nil, fmt.Errorf("telemetry: create meter provider: %w", err)
+			return nil, nil, fmt.Errorf("telemetry: create meter provider: %w", err)
 		}
 		meterProvider = mp
 		otel.SetMeterProvider(mp)
@@ -133,12 +135,12 @@ func Init(ctx context.Context, opts ...Option) (func(context.Context) error, err
 			}
 		}
 		if len(errs) > 0 {
-			return fmt.Errorf("telemetry shutdown errors: %v", errs)
+			return errors.Join(errs...)
 		}
 		return nil
 	}
 
-	return shutdown, nil
+	return cfg, shutdown, nil
 }
 
 func newResource(_ context.Context, cfg *Config) (*resource.Resource, error) {

@@ -1,6 +1,8 @@
 package quix
 
 import (
+	"time"
+
 	"github.com/fztcjjl/quix/core/config"
 	"github.com/fztcjjl/quix/core/log"
 	"github.com/fztcjjl/quix/core/telemetry"
@@ -12,11 +14,9 @@ import (
 // Option configures the App during creation.
 type Option func(*App)
 
-// WithLogger sets a custom Logger implementation for the App.
-// It also updates the global default Logger.
+// WithLogger sets a custom Logger as the global default.
 func WithLogger(l log.Logger) Option {
 	return func(a *App) {
-		a.logger = l
 		log.SetDefault(l)
 	}
 }
@@ -79,5 +79,13 @@ func WithTelemetry(opts ...telemetry.Option) Option {
 func WithSetup(funcs ...func(*App) error) Option {
 	return func(a *App) {
 		a.setupFuncs = append(a.setupFuncs, funcs...)
+	}
+}
+
+// WithShutdownTimeout sets the maximum duration for graceful shutdown.
+// Defaults to 5 seconds if not set.
+func WithShutdownTimeout(d time.Duration) Option {
+	return func(a *App) {
+		a.shutdownTimeout = d
 	}
 }

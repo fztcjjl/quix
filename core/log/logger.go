@@ -85,6 +85,11 @@ func SetLevel(level Level) {
 	Default().SetLevel(level)
 }
 
+// Close closes the global default Logger, flushing any buffered output.
+func Close() error {
+	return Default().Close()
+}
+
 // normalizeArgs standardizes key-value pairs for all adapters.
 // Non-string keys are converted to "key_0", "key_1", etc.
 // Odd trailing args are silently dropped.

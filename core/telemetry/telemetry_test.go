@@ -66,7 +66,7 @@ func TestWithStdoutExporter(t *testing.T) {
 }
 
 func TestInitWithStdoutExporter(t *testing.T) {
-	shutdown, err := Init(context.Background(),
+	_, shutdown, err := Init(context.Background(),
 		WithServiceName("test-app"),
 		WithStdoutExporter(true),
 	)
@@ -84,7 +84,7 @@ func TestInitWithStdoutExporter(t *testing.T) {
 }
 
 func TestInitWithTracesDisabled(t *testing.T) {
-	shutdown, err := Init(context.Background(),
+	_, shutdown, err := Init(context.Background(),
 		WithServiceName("test-app"),
 		WithStdoutExporter(true),
 		WithTracesEnabled(false),
@@ -99,7 +99,7 @@ func TestInitWithTracesDisabled(t *testing.T) {
 }
 
 func TestShutdownOrder(t *testing.T) {
-	shutdown, err := Init(context.Background(),
+	_, shutdown, err := Init(context.Background(),
 		WithServiceName("test-app"),
 		WithStdoutExporter(true),
 	)
@@ -158,7 +158,7 @@ func TestInitSetsGlobalProviders(t *testing.T) {
 	origTP := otel.GetTracerProvider()
 	origMP := otel.GetMeterProvider()
 
-	shutdown, err := Init(context.Background(),
+	_, shutdown, err := Init(context.Background(),
 		WithServiceName("provider-test"),
 		WithStdoutExporter(true),
 	)

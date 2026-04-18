@@ -9,6 +9,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// ValidationMessage is the message used when field validation fails with violations.
+// Override this to customize or localize the message.
+var ValidationMessage = "请求参数验证失败"
+
 // FieldViolation represents a single field validation failure.
 type FieldViolation struct {
 	Field   string `json:"field"`
@@ -57,7 +61,7 @@ func toValidationError(err error) *apperrors.Error {
 
 	return &apperrors.Error{
 		Code:       "validation_error",
-		Message:    "请求参数验证失败",
+		Message:    ValidationMessage,
 		Details:    violations,
 		StatusCode: http.StatusBadRequest,
 	}

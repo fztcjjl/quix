@@ -60,6 +60,14 @@ App SHALL 在用户未通过 `WithLogger` 设置自定义 logger 时，根据 `Q
 - **WHEN** `Run()` 收到 SIGINT/SIGTERM
 - **THEN** 调用 `Shutdown(ctx)` 完成优雅关闭
 
+#### Scenario: Run exits on server startup failure
+- **WHEN** HTTP server 启动失败（如端口被占用）
+- **THEN** MUST 输出 error 日志 "http server failed to start" 并调用 `os.Exit(1)` 退出程序
+
+#### Scenario: Run exits on RPC server startup failure
+- **WHEN** RPC server 启动失败
+- **THEN** MUST 输出 error 日志 "rpc server failed to start" 并调用 `os.Exit(1)` 退出程序
+
 ### Requirement: App outputs startup info log
 `Run()` SHALL 在启动 HTTP server 前输出一条 info 日志，包含 HTTP 监听地址、环境（QUIX_ENV）、Gin mode、telemetry 是否启用。
 
@@ -81,6 +89,17 @@ App SHALL 在用户未通过 `WithLogger` 设置自定义 logger 时，根据 `Q
 #### Scenario: Shutdown error
 - **WHEN** 某个组件关闭失败
 - **THEN** 输出 error 日志并继续关闭后续组件
+
+### Requirement: App supports WithShutdownTimeout option
+App SHALL 提供 `WithShutdownTimeout(d time.Duration)` Option，允许自定义优雅关闭超时时间。默认值为 5 秒。
+
+#### Scenario: Default shutdown timeout
+- **WHEN** 用户未传入 `WithShutdownTimeout`
+- **THEN** MUST 使用默认值 5 秒
+
+#### Scenario: Custom shutdown timeout
+- **WHEN** 用户传入 `quix.New(quix.WithShutdownTimeout(15 * time.Second))`
+- **THEN** 优雅关闭超时 MUST 为 15 秒
 
 ### Requirement: App supports WithSetup startup callback
 App SHALL 提供 `WithSetup(funcs ...func(*App) error)` Option，支持注册多个启动前回调。回调在 `Run()` 中启动日志输出后、HTTP server 启动前执行，按注册顺序执行。

@@ -5,16 +5,24 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/go-playground/form/v4"
 )
 
-var formDecoder = form.NewDecoder()
+var (
+	decoderOnce sync.Once
+	decoder     *form.Decoder
+)
 
-func init() {
-	// Proto-generated structs only have json tags, not uri/form tags.
-	// SetTagName("json") allows the form decoder to decode using json tag names.
-	formDecoder.SetTagName("json")
+func getFormDecoder() *form.Decoder {
+	decoderOnce.Do(func() {
+		decoder = form.NewDecoder()
+		// Proto-generated structs only have json tags, not uri/form tags.
+		// SetTagName("json") allows the form decoder to decode using json tag names.
+		decoder.SetTagName("json")
+	})
+	return decoder
 }
 
 // ShouldBindUri decodes path parameters into req using the form decoder.
@@ -24,13 +32,13 @@ func (c *Context) ShouldBindUri(req any) error {
 	for _, p := range c.Params {
 		values[p.Key] = []string{p.Value}
 	}
-	return formDecoder.Decode(req, values)
+	return getFormDecoder().Decode(req, values)
 }
 
 // ShouldBindQuery decodes URL query parameters into req using the form decoder.
 // This works with proto-generated structs that have json tags.
 func (c *Context) ShouldBindQuery(req any) error {
-	return formDecoder.Decode(req, c.Request.URL.Query())
+	return getFormDecoder().Decode(req, c.Request.URL.Query())
 }
 
 // ShouldBindJSON binds the request body as JSON into req.
@@ -46,7 +54,7 @@ func (c *Context) ShouldBindJSON(req any) error {
 func (c *Context) ShouldBindUriConflictCheck(req any, pathVars []string) error {
 	rv := reflect.ValueOf(req)
 	if rv.Kind() != reflect.Pointer {
-		return nil
+		return fmt.Errorf("ShouldBindUriConflictCheck: expected pointer, got %T", req)
 	}
 	rv = rv.Elem()
 	if rv.Kind() != reflect.Struct {
@@ -74,7 +82,7 @@ func (c *Context) ShouldBindUriConflictCheck(req any, pathVars []string) error {
 	for _, p := range c.Params {
 		values[p.Key] = []string{p.Value}
 	}
-	return formDecoder.Decode(req, values)
+	return getFormDecoder().Decode(req, values)
 }
 
 // findFieldByJSONTag returns the field index for the struct field whose json tag

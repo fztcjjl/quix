@@ -26,6 +26,9 @@ type options struct {
 	addr                   string
 	defaultMiddleware      bool
 	readHeaderTimeout      time.Duration
+	readTimeout            time.Duration
+	writeTimeout           time.Duration
+	idleTimeout            time.Duration
 	telemetryServiceName   string
 	telemetryTracesEnabled bool
 }
@@ -48,6 +51,27 @@ func WithDefaultMiddleware(enabled bool) Option {
 func WithReadHeaderTimeout(d time.Duration) Option {
 	return func(o *options) {
 		o.readHeaderTimeout = d
+	}
+}
+
+// WithReadTimeout sets the server ReadTimeout.
+func WithReadTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.readTimeout = d
+	}
+}
+
+// WithWriteTimeout sets the server WriteTimeout.
+func WithWriteTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.writeTimeout = d
+	}
+}
+
+// WithIdleTimeout sets the server IdleTimeout.
+func WithIdleTimeout(d time.Duration) Option {
+	return func(o *options) {
+		o.idleTimeout = d
 	}
 }
 
@@ -80,7 +104,14 @@ func NewServer(opts ...Option) *Server {
 	s := &Server{
 		Engine: engine,
 		addr:   o.addr,
-		server: &http.Server{Addr: o.addr, Handler: engine, ReadHeaderTimeout: o.readHeaderTimeout},
+		server: &http.Server{
+			Addr:              o.addr,
+			Handler:           engine,
+			ReadHeaderTimeout: o.readHeaderTimeout,
+			ReadTimeout:       o.readTimeout,
+			WriteTimeout:      o.writeTimeout,
+			IdleTimeout:       o.idleTimeout,
+		},
 	}
 
 	if o.defaultMiddleware {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -20,8 +21,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// shutdownTimeout is the maximum duration for graceful shutdown.
-const shutdownTimeout = 5 * time.Second
+// defaultShutdownTimeout is the maximum duration for graceful shutdown.
+const defaultShutdownTimeout = 5 * time.Second
 
 // Environment represents the application deployment environment.
 type Environment string
@@ -68,7 +69,6 @@ func ginModeForEnv(env Environment) string {
 type App struct {
 	httpServer             *qhttp.Server
 	rpcServer              transport.Server
-	logger                 log.Logger
 	config                 config.Config
 	env                    Environment
 	defaultMiddleware      bool
@@ -77,6 +77,7 @@ type App struct {
 	telemetryServiceName   string
 	telemetryTracesEnabled bool
 	setupFuncs             []func(*App) error
+	shutdownTimeout        time.Duration
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -102,14 +103,14 @@ func New(opts ...Option) *App {
 	if env == EnvDev {
 		logOutput = zerolog.ConsoleWriter{Out: os.Stderr}
 	}
-	defaultLog := log.NewZerolog(zerolog.New(logOutput).With().Timestamp().Logger())
+	log.SetDefault(log.NewZerolog(zerolog.New(logOutput).With().Timestamp().Logger()))
+
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
-		logger: defaultLog,
-		config: defaultCfg,
-		env:    env,
+		config:          defaultCfg,
+		env:             env,
+		shutdownTimeout: defaultShutdownTimeout,
 	}
-	log.SetDefault(defaultLog)
 	// Auto-set Gin mode from environment; user options can override via WithGinMode
 	gin.SetMode(ginModeForEnv(app.env))
 	// Apply user options
@@ -118,24 +119,20 @@ func New(opts ...Option) *App {
 	}
 	// Initialize telemetry if WithTelemetry was provided
 	if len(app.telemetryOpts) > 0 {
-		shutdown, err := telemetry.Init(context.Background(), app.telemetryOpts...)
+		telCfg, shutdown, err := telemetry.Init(context.Background(), app.telemetryOpts...)
 		if err != nil {
-			app.logger.Warn(context.Background(), "telemetry init failed, running without telemetry", "error", err)
+			log.Warn(context.Background(), "telemetry init failed, running without telemetry", "error", err)
 		} else {
 			app.telemetryShutdown = shutdown
-			// Enable trace_id in logging middleware
 			middleware.ExtractTraceID = telemetry.ExtractTraceID
+			app.telemetryServiceName = telCfg.ServiceName
+			app.telemetryTracesEnabled = telCfg.TracesEnabled
 		}
-		// Resolve telemetry config for Server middleware injection
-		cfg := &telemetry.Config{
-			ServiceName:   "unknown_service",
-			TracesEnabled: err == nil,
-		}
-		for _, opt := range app.telemetryOpts {
-			opt(cfg)
-		}
-		app.telemetryServiceName = cfg.ServiceName
-		app.telemetryTracesEnabled = cfg.TracesEnabled
+	}
+	// Production mode: hide internal error details from HTTP responses and logs
+	if app.env == EnvProd || app.env == EnvStaging {
+		qhttp.HideInternalErrors = true
+		middleware.HideStackTraces = true
 	}
 	// Config-driven server creation:
 	// - If http is configured (http.addr or http.port), start HTTP server
@@ -160,11 +157,6 @@ func New(opts ...Option) *App {
 	return app
 }
 
-// Logger returns the App's logger.
-func (a *App) Logger() log.Logger {
-	return a.logger
-}
-
 // Config returns the App's config.
 func (a *App) Config() config.Config {
 	return a.config
@@ -182,7 +174,7 @@ func (a *App) Run() {
 	if a.telemetryShutdown != nil {
 		telemetryStatus = "enabled"
 	}
-	a.logger.Info(context.Background(), "starting server",
+	log.Info(context.Background(), "starting server",
 		"addr", resolveHttpAddr(a.config),
 		"env", string(a.env),
 		"gin_mode", gin.Mode(),
@@ -191,45 +183,52 @@ func (a *App) Run() {
 	// Execute WithSetup callbacks
 	for _, fn := range a.setupFuncs {
 		if err := fn(a); err != nil {
-			a.logger.Error(context.Background(), "setup callback failed",
+			log.Error(context.Background(), "setup callback failed",
 				"error", err)
 			os.Exit(1)
 		}
 	}
 
-	// Start servers
+	// Start servers — exit immediately on failure
+	startErr := make(chan error, 1)
 	if a.httpServer != nil {
 		go func() {
-			if err := a.httpServer.Start(); err != nil {
-				a.logger.Error(context.Background(), "http server failed to start",
-					"error", fmt.Sprintf("%v", err))
+			if err := a.httpServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Error(context.Background(), "http server failed to start", "error", err)
+				startErr <- err
 			}
 		}()
 	}
 	if a.rpcServer != nil {
 		go func() {
 			if err := a.rpcServer.Start(); err != nil {
-				a.logger.Error(context.Background(), "rpc server failed to start",
-					"error", fmt.Sprintf("%v", err))
+				log.Error(context.Background(), "rpc server failed to start", "error", err)
+				startErr <- err
 			}
 		}()
 	}
 
-	// Wait for shutdown signal
+	// Wait for shutdown signal or startup failure
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	select {
+	case err := <-startErr:
+		log.Error(context.Background(), "server startup failed, exiting", "error", err)
+		os.Exit(1)
+	case sig := <-quit:
+		_ = sig
+	}
 
-	a.logger.Info(context.Background(), "shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	log.Info(context.Background(), "shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), a.shutdownTimeout)
 	defer cancel()
 
 	if err := a.Shutdown(ctx); err != nil {
-		a.logger.Error(context.Background(), "shutdown failed",
-			"error", fmt.Sprintf("%v", err))
+		log.Error(context.Background(), "shutdown failed",
+			"error", err)
 	}
 
-	a.logger.Info(context.Background(), "server exited")
+	log.Info(context.Background(), "server exited")
 }
 
 // Shutdown gracefully shuts down all servers.
@@ -237,34 +236,31 @@ func (a *App) Shutdown(ctx context.Context) error {
 	var errs []error
 
 	if a.rpcServer != nil {
-		a.logger.Info(ctx, "stopping rpc server...")
+		log.Info(ctx, "stopping rpc server...")
 		if err := a.rpcServer.Stop(ctx); err != nil {
-			a.logger.Error(ctx, "rpc server failed to stop", "error", err)
+			log.Error(ctx, "rpc server failed to stop", "error", err)
 			errs = append(errs, err)
 		}
 	}
 	if a.httpServer != nil {
-		a.logger.Info(ctx, "stopping http server...")
+		log.Info(ctx, "stopping http server...")
 		if err := a.httpServer.Stop(ctx); err != nil {
-			a.logger.Error(ctx, "http server failed to stop", "error", err)
+			log.Error(ctx, "http server failed to stop", "error", err)
 			errs = append(errs, err)
 		}
 	}
 	// Flush telemetry providers after servers stop
 	if a.telemetryShutdown != nil {
-		a.logger.Info(ctx, "flushing telemetry...")
+		log.Info(ctx, "flushing telemetry...")
 		if err := a.telemetryShutdown(ctx); err != nil {
-			a.logger.Warn(ctx, "telemetry flush failed", "error", err)
+			log.Warn(ctx, "telemetry flush failed", "error", err)
 			errs = append(errs, err)
 		}
 	}
 	// Close logger last
-	if a.logger != nil {
-		a.logger.Info(ctx, "closing logger...")
-		if err := a.logger.Close(); err != nil {
-			a.logger.Error(ctx, "logger close failed", "error", err)
-			errs = append(errs, err)
-		}
+	if err := log.Close(); err != nil {
+		log.Error(ctx, "logger close failed", "error", err)
+		errs = append(errs, err)
 	}
 	return errors.Join(errs...)
 }

@@ -87,30 +87,32 @@ func LoggingWith(opts ...LoggingOption) gin.HandlerFunc {
 		reqID, _ := c.Get("X-Request-Id")
 		clientIP := c.ClientIP()
 
-		fields := map[string]any{
-			"method":        c.Request.Method,
-			"path":          path,
-			"status":        status,
-			"latency":       latency.String(),
-			"client_ip":     clientIP,
-			"response_size": c.Writer.Size(),
+		// Build log args directly as a slice (avoids intermediate map allocation).
+		args := []any{
+			"method", c.Request.Method,
+			"path", path,
+			"status", status,
+			"latency", latency.String(),
+			"client_ip", clientIP,
+			"response_size", c.Writer.Size(),
 		}
 		if reqID != nil {
-			fields["request_id"] = reqID
+			args = append(args, "request_id", reqID)
 		}
 
 		ctx := c.Request.Context()
 		if ExtractTraceID != nil {
 			if traceID := ExtractTraceID(ctx); traceID != "" {
-				fields["trace_id"] = traceID
+				args = append(args, "trace_id", traceID)
 			}
 		}
 
 		if cfg.hook != nil {
+			// Build a map from args for the hook, then rebuild args with any additions.
+			fields := sliceToMap(args)
 			cfg.hook(c, fields)
+			args = mapToSlice(fields)
 		}
-
-		args := mapToSlice(fields)
 
 		switch {
 		case status >= http.StatusInternalServerError:
@@ -121,6 +123,17 @@ func LoggingWith(opts ...LoggingOption) gin.HandlerFunc {
 			log.Info(ctx, "request completed", args...)
 		}
 	}
+}
+
+// sliceToMap converts a flat key-value slice to a map.
+func sliceToMap(args []any) map[string]any {
+	m := make(map[string]any, len(args)/2)
+	for i := 0; i+1 < len(args); i += 2 {
+		if k, ok := args[i].(string); ok {
+			m[k] = args[i+1]
+		}
+	}
+	return m
 }
 
 // mapToSlice converts a map to a flat key-value slice.

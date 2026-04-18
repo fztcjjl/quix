@@ -21,16 +21,16 @@ func TestNewDefaultLogger(t *testing.T) {
 	if app == nil {
 		t.Fatal("New() returned nil")
 	}
-	if app.Logger() == nil {
+	if log.Default() == nil {
 		t.Fatal("default logger is nil")
 	}
 }
 
 func TestWithLoggerInject(t *testing.T) {
 	custom := log.NewSlog()
-	app := New(WithLogger(custom))
-	if app.Logger() != custom {
-		t.Fatal("WithLogger did not inject the custom logger")
+	_ = New(WithLogger(custom))
+	if log.Default() != custom {
+		t.Fatal("WithLogger did not set the custom logger as global default")
 	}
 }
 
