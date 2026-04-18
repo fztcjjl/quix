@@ -3,7 +3,7 @@
 
 package testdata
 
-import apperrors "github.com/fztcjjl/quix/core/errors"
+import qerrors "github.com/fztcjjl/quix/core/errors"
 
 const (
 	UserErrorInvalidInputCode     = "user error invalid input"
@@ -14,8 +14,8 @@ const (
 )
 
 // UserInvalidInput returns an Error with code "user error invalid input", message "参数验证失败", HTTP status 400.
-func UserInvalidInput() *apperrors.Error {
-	return &apperrors.Error{
+func UserInvalidInput() *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorInvalidInputCode,
 		Message:    "参数验证失败",
 		StatusCode: 400,
@@ -23,8 +23,8 @@ func UserInvalidInput() *apperrors.Error {
 }
 
 // UserInvalidInputWithDetails returns an Error with code "user error invalid input", message "参数验证失败", HTTP status 400, and the given details.
-func UserInvalidInputWithDetails(details any) *apperrors.Error {
-	return &apperrors.Error{
+func UserInvalidInputWithDetails(details any) *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorInvalidInputCode,
 		Message:    "参数验证失败",
 		StatusCode: 400,
@@ -33,8 +33,8 @@ func UserInvalidInputWithDetails(details any) *apperrors.Error {
 }
 
 // UserPermissionDenied returns an Error with code "user error permission denied", message "没有权限", HTTP status 403.
-func UserPermissionDenied() *apperrors.Error {
-	return &apperrors.Error{
+func UserPermissionDenied() *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorPermissionDeniedCode,
 		Message:    "没有权限",
 		StatusCode: 403,
@@ -42,8 +42,8 @@ func UserPermissionDenied() *apperrors.Error {
 }
 
 // UserPermissionDeniedWithDetails returns an Error with code "user error permission denied", message "没有权限", HTTP status 403, and the given details.
-func UserPermissionDeniedWithDetails(details any) *apperrors.Error {
-	return &apperrors.Error{
+func UserPermissionDeniedWithDetails(details any) *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorPermissionDeniedCode,
 		Message:    "没有权限",
 		StatusCode: 403,
@@ -52,8 +52,8 @@ func UserPermissionDeniedWithDetails(details any) *apperrors.Error {
 }
 
 // UserNotFound returns an Error with code "user error not found", message "用户不存在", HTTP status 404.
-func UserNotFound() *apperrors.Error {
-	return &apperrors.Error{
+func UserNotFound() *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorNotFoundCode,
 		Message:    "用户不存在",
 		StatusCode: 404,
@@ -61,8 +61,8 @@ func UserNotFound() *apperrors.Error {
 }
 
 // UserNotFoundWithDetails returns an Error with code "user error not found", message "用户不存在", HTTP status 404, and the given details.
-func UserNotFoundWithDetails(details any) *apperrors.Error {
-	return &apperrors.Error{
+func UserNotFoundWithDetails(details any) *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorNotFoundCode,
 		Message:    "用户不存在",
 		StatusCode: 404,
@@ -71,8 +71,8 @@ func UserNotFoundWithDetails(details any) *apperrors.Error {
 }
 
 // UserAlreadyExists returns an Error with code "user error already exists", message "用户已存在", HTTP status 409.
-func UserAlreadyExists() *apperrors.Error {
-	return &apperrors.Error{
+func UserAlreadyExists() *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorAlreadyExistsCode,
 		Message:    "用户已存在",
 		StatusCode: 409,
@@ -80,8 +80,8 @@ func UserAlreadyExists() *apperrors.Error {
 }
 
 // UserAlreadyExistsWithDetails returns an Error with code "user error already exists", message "用户已存在", HTTP status 409, and the given details.
-func UserAlreadyExistsWithDetails(details any) *apperrors.Error {
-	return &apperrors.Error{
+func UserAlreadyExistsWithDetails(details any) *qerrors.Error {
+	return &qerrors.Error{
 		Code:       UserErrorAlreadyExistsCode,
 		Message:    "用户已存在",
 		StatusCode: 409,

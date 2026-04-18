@@ -7,7 +7,7 @@ import (
 
 	validate "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	protovalidate "buf.build/go/protovalidate"
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -59,7 +59,7 @@ func TestToValidationError_SingleViolation(t *testing.T) {
 	err := toValidationError(valErr)
 	assert.NotNil(t, err)
 
-	var appErr *apperrors.Error
+	var appErr *qerrors.Error
 	assert.True(t, errors.As(err, &appErr))
 	assert.Equal(t, "validation_error", appErr.Code)
 	assert.Equal(t, http.StatusBadRequest, appErr.StatusCode)
@@ -82,7 +82,7 @@ func TestToValidationError_MultipleViolations(t *testing.T) {
 
 	err := toValidationError(valErr)
 
-	var appErr *apperrors.Error
+	var appErr *qerrors.Error
 	assert.True(t, errors.As(err, &appErr))
 
 	details, ok := appErr.Details.([]FieldViolation)
@@ -95,7 +95,7 @@ func TestToValidationError_MultipleViolations(t *testing.T) {
 func TestToValidationError_NonValidationError(t *testing.T) {
 	err := toValidationError(assert.AnError)
 
-	var appErr *apperrors.Error
+	var appErr *qerrors.Error
 	assert.True(t, errors.As(err, &appErr))
 	assert.Equal(t, "validation_error", appErr.Code)
 	assert.Equal(t, http.StatusBadRequest, appErr.StatusCode)

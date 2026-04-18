@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -17,7 +17,7 @@ func TestSetError_WithAppError(t *testing.T) {
 	r := gin.New()
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
-		err := &apperrors.Error{Code: "not_found", Message: "not found", StatusCode: 404}
+		err := &qerrors.Error{Code: "not_found", Message: "not found", StatusCode: 404}
 		ctx.SetError(err)
 	})
 
@@ -31,10 +31,10 @@ func TestSetError_WithAppError(t *testing.T) {
 func TestSetError_GetError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	var retrieved *apperrors.Error
+	var retrieved *qerrors.Error
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
-		err := &apperrors.Error{Code: "bad_request", Message: "invalid param", StatusCode: 400}
+		err := &qerrors.Error{Code: "bad_request", Message: "invalid param", StatusCode: 400}
 		ctx.SetError(err)
 		retrieved = ctx.GetError()
 	})
@@ -46,7 +46,7 @@ func TestSetError_GetError(t *testing.T) {
 	assert.NotNil(t, retrieved)
 	assert.Equal(t, "bad_request", retrieved.Code)
 	assert.Equal(t, "invalid param", retrieved.Message)
-	var target *apperrors.Error
+	var target *qerrors.Error
 	assert.True(t, errors.As(retrieved, &target))
 }
 

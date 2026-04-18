@@ -4,20 +4,20 @@ import (
 	"net/http"
 	"testing"
 
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 )
 
 func TestPredefinedErrorsDefaultStatusCode(t *testing.T) {
 	tests := []struct {
 		name       string
-		fn         func(string, string) *apperrors.Error
+		fn         func(string, string) *qerrors.Error
 		wantStatus int
 	}{
-		{"BadRequest", apperrors.BadRequest, http.StatusBadRequest},
-		{"Unauthorized", apperrors.Unauthorized, http.StatusUnauthorized},
-		{"Forbidden", apperrors.Forbidden, http.StatusForbidden},
-		{"NotFound", apperrors.NotFound, http.StatusNotFound},
-		{"Internal", apperrors.Internal, http.StatusInternalServerError},
+		{"BadRequest", qerrors.BadRequest, http.StatusBadRequest},
+		{"Unauthorized", qerrors.Unauthorized, http.StatusUnauthorized},
+		{"Forbidden", qerrors.Forbidden, http.StatusForbidden},
+		{"NotFound", qerrors.NotFound, http.StatusNotFound},
+		{"Internal", qerrors.Internal, http.StatusInternalServerError},
 	}
 
 	for _, tt := range tests {
@@ -37,7 +37,7 @@ func TestPredefinedErrorsDefaultStatusCode(t *testing.T) {
 }
 
 func TestPredefinedErrorsOverrideStatusCode(t *testing.T) {
-	err := apperrors.NotFound("user_not_found", "用户不存在")
+	err := qerrors.NotFound("user_not_found", "用户不存在")
 	err.StatusCode = http.StatusGone
 
 	if err.StatusCode != http.StatusGone {

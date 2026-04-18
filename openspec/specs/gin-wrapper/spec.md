@@ -139,8 +139,8 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 ### Requirement: SetAppError 公共错误处理函数
 框架 SHALL 在 `core/transport/http/server/errors.go` 中提供 `SetAppError(c *gin.Context, err error)` 函数，作为统一的错误处理入口。
 
-#### Scenario: SetAppError with apperrors.Error
-- **WHEN** 调用 `SetAppError(c, &apperrors.Error{Code: "not_found", StatusCode: 404})`
+#### Scenario: SetAppError with qerrors.Error
+- **WHEN** 调用 `SetAppError(c, &qerrors.Error{Code: "not_found", StatusCode: 404})`
 - **THEN** MUST 将 error 存入 `c.Set("app_error", err)`，并调用 `c.AbortWithStatus(404)`
 
 #### Scenario: SetAppError with standard error
@@ -150,7 +150,7 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
   - 当 `HideInternalErrors` 为 false（dev/test）时：Message 为原始错误消息
 
 ### Requirement: HideInternalErrors controls internal error exposure
-框架 SHALL 提供 `server.HideInternalErrors` 包级变量，控制 `SetAppError` 是否向客户端隐藏非 `apperrors.Error` 类型的原始错误消息。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动设置为 true。
+框架 SHALL 提供 `server.HideInternalErrors` 包级变量，控制 `SetAppError` 是否向客户端隐藏非 `qerrors.Error` 类型的原始错误消息。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动设置为 true。
 
 #### Scenario: Production hides internal error
 - **WHEN** `QUIX_ENV=prod` 且 handler 返回 `fmt.Errorf("connection refused: host=db.internal:5432")`
@@ -161,7 +161,7 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 - **THEN** 响应 body 中的 Message MUST 为 "connection refused"
 
 ### Requirement: ResponseMiddleware
-框架 SHALL 提供 ResponseMiddleware，统一格式化错误响应。ResponseMiddleware MUST 对 `app_error` 进行安全类型断言（comma-ok），防止非 `*apperrors.Error` 类型导致 panic。
+框架 SHALL 提供 ResponseMiddleware，统一格式化错误响应。ResponseMiddleware MUST 对 `app_error` 进行安全类型断言（comma-ok），防止非 `*qerrors.Error` 类型导致 panic。
 
 #### Scenario: Error response format
 - **WHEN** handler 中返回了错误且 ResponseMiddleware 已挂载
@@ -171,8 +171,8 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 - **WHEN** handler 正常执行且未返回错误
 - **THEN** ResponseMiddleware MUST 不写入任何响应（成功响应由 handler 直接处理）
 
-#### Scenario: Non-apperrors.Error in context
-- **WHEN** `app_error` 存储了非 `*apperrors.Error` 类型的值
+#### Scenario: Non-qerrors.Error in context
+- **WHEN** `app_error` 存储了非 `*qerrors.Error` 类型的值
 - **THEN** MUST 返回 HTTP 500 且不 panic（而非直接断言崩溃）
 
 ### Requirement: HTTP Server default middleware

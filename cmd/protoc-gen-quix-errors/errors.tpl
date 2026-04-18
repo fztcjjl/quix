@@ -3,7 +3,7 @@
 
 package {{.PackageName}}
 
-import apperrors "{{apperrorsPkg}}"
+import qerrors "{{qerrorsPkg}}"
 
 const (
 {{- range .Enum.Values}}
@@ -13,8 +13,8 @@ const (
 {{range .Enum.Values}}
 {{- if not .IsUnspecified}}
 // {{.FuncName}} returns an Error with code "{{.Code}}", message "{{.Message}}", HTTP status {{.HTTPStatus}}.
-func {{.FuncName}}() *apperrors.Error {
-	return &apperrors.Error{
+func {{.FuncName}}() *qerrors.Error {
+	return &qerrors.Error{
 		Code:       {{.ConstName}},
 		Message:    {{printf "%q" .Message}},
 		StatusCode: {{.HTTPStatus}},
@@ -22,8 +22,8 @@ func {{.FuncName}}() *apperrors.Error {
 }
 
 // {{.FuncNameWD}} returns an Error with code "{{.Code}}", message "{{.Message}}", HTTP status {{.HTTPStatus}}, and the given details.
-func {{.FuncNameWD}}(details any) *apperrors.Error {
-	return &apperrors.Error{
+func {{.FuncNameWD}}(details any) *qerrors.Error {
+	return &qerrors.Error{
 		Code:       {{.ConstName}},
 		Message:    {{printf "%q" .Message}},
 		StatusCode: {{.HTTPStatus}},

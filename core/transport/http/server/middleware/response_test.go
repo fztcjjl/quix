@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/fztcjjl/quix/core/transport/http/server"
 	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
@@ -21,7 +21,7 @@ func TestResponseMiddlewareFormatsError(t *testing.T) {
 	r := gin.New()
 	r.Use(middleware.ResponseMiddleware())
 	r.GET("/test", server.Handler(func(c *gin.Context) error {
-		return apperrors.NotFound("user_not_found", "用户不存在")
+		return qerrors.NotFound("user_not_found", "用户不存在")
 	}))
 
 	w := httptest.NewRecorder()
@@ -115,7 +115,7 @@ func TestResponseMiddlewareErrorWithDetails(t *testing.T) {
 	r := gin.New()
 	r.Use(middleware.ResponseMiddleware())
 	r.GET("/test", server.Handler(func(c *gin.Context) error {
-		return &apperrors.Error{
+		return &qerrors.Error{
 			Code:       "param_invalid",
 			Message:    "参数验证失败",
 			Details:    map[string]string{"field": "email", "reason": "格式无效"},

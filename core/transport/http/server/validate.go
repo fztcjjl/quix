@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	protovalidate "buf.build/go/protovalidate"
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -21,7 +21,7 @@ type FieldViolation struct {
 
 // ValidateRequest checks if req is a proto message and validates it using protovalidate.
 // Returns nil if req is not a proto.Message (no validation rules).
-// Translates validation errors to *apperrors.Error with HTTP 400.
+// Translates validation errors to *qerrors.Error with HTTP 400.
 func ValidateRequest(req any) error {
 	msg, ok := req.(proto.Message)
 	if !ok {
@@ -33,10 +33,10 @@ func ValidateRequest(req any) error {
 	return nil
 }
 
-func toValidationError(err error) *apperrors.Error {
+func toValidationError(err error) *qerrors.Error {
 	var valErr *protovalidate.ValidationError
 	if !errors.As(err, &valErr) {
-		return &apperrors.Error{
+		return &qerrors.Error{
 			Code:       "validation_error",
 			Message:    err.Error(),
 			StatusCode: http.StatusBadRequest,
@@ -52,14 +52,14 @@ func toValidationError(err error) *apperrors.Error {
 	}
 
 	if len(violations) == 0 {
-		return &apperrors.Error{
+		return &qerrors.Error{
 			Code:       "validation_error",
 			Message:    err.Error(),
 			StatusCode: http.StatusBadRequest,
 		}
 	}
 
-	return &apperrors.Error{
+	return &qerrors.Error{
 		Code:       "validation_error",
 		Message:    ValidationMessage,
 		Details:    violations,

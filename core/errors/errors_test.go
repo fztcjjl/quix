@@ -5,11 +5,11 @@ import (
 	"errors"
 	"testing"
 
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 )
 
 func TestErrorImplementsErrorInterface(t *testing.T) {
-	e := &apperrors.Error{Code: "test", Message: "test message"}
+	e := &qerrors.Error{Code: "test", Message: "test message"}
 	var _ error = e
 
 	if e.Error() != "test message" {
@@ -20,32 +20,32 @@ func TestErrorImplementsErrorInterface(t *testing.T) {
 func TestErrorJSONSerialization(t *testing.T) {
 	tests := []struct {
 		name     string
-		err      *apperrors.Error
+		err      *qerrors.Error
 		wantJSON string
 	}{
 		{
 			name:     "full error with details",
-			err:      &apperrors.Error{Code: "param_invalid", Message: "参数验证失败", Details: "field: name", StatusCode: 400},
+			err:      &qerrors.Error{Code: "param_invalid", Message: "参数验证失败", Details: "field: name", StatusCode: 400},
 			wantJSON: `{"code":"param_invalid","message":"参数验证失败","details":"field: name"}`,
 		},
 		{
 			name:     "error without details",
-			err:      &apperrors.Error{Code: "not_found", Message: "不存在", StatusCode: 404},
+			err:      &qerrors.Error{Code: "not_found", Message: "不存在", StatusCode: 404},
 			wantJSON: `{"code":"not_found","message":"不存在"}`,
 		},
 		{
 			name:     "error with map details",
-			err:      &apperrors.Error{Code: "validation", Message: "验证失败", Details: map[string]string{"field": "email", "reason": "invalid format"}, StatusCode: 400},
+			err:      &qerrors.Error{Code: "validation", Message: "验证失败", Details: map[string]string{"field": "email", "reason": "invalid format"}, StatusCode: 400},
 			wantJSON: `{"code":"validation","message":"验证失败","details":{"field":"email","reason":"invalid format"}}`,
 		},
 		{
 			name:     "error with slice details",
-			err:      &apperrors.Error{Code: "batch_error", Message: "批量操作部分失败", Details: []map[string]any{{"id": 1, "error": "not found"}, {"id": 2, "error": "forbidden"}}, StatusCode: 207},
+			err:      &qerrors.Error{Code: "batch_error", Message: "批量操作部分失败", Details: []map[string]any{{"id": 1, "error": "not found"}, {"id": 2, "error": "forbidden"}}, StatusCode: 207},
 			wantJSON: `{"code":"batch_error","message":"批量操作部分失败","details":[{"error":"not found","id":1},{"error":"forbidden","id":2}]}`,
 		},
 		{
 			name:     "status code not in JSON",
-			err:      &apperrors.Error{Code: "internal", Message: "内部错误", StatusCode: 500},
+			err:      &qerrors.Error{Code: "internal", Message: "内部错误", StatusCode: 500},
 			wantJSON: `{"code":"internal","message":"内部错误"}`,
 		},
 	}
@@ -64,7 +64,7 @@ func TestErrorJSONSerialization(t *testing.T) {
 }
 
 func TestErrorDetailsIsOptional(t *testing.T) {
-	e := &apperrors.Error{Code: "test", Message: "test", StatusCode: 400}
+	e := &qerrors.Error{Code: "test", Message: "test", StatusCode: 400}
 	data, err := json.Marshal(e)
 	if err != nil {
 		t.Fatalf("json.Marshal() error = %v", err)
@@ -80,7 +80,7 @@ func TestErrorWithCustomStructDetails(t *testing.T) {
 		Message string `json:"message"`
 	}
 
-	e := &apperrors.Error{
+	e := &qerrors.Error{
 		Code:       "validation",
 		Message:    "验证失败",
 		Details:    []FieldError{{Field: "email", Message: "格式无效"}, {Field: "age", Message: "必须大于0"}},
@@ -99,7 +99,7 @@ func TestErrorWithCustomStructDetails(t *testing.T) {
 }
 
 func TestErrorIsComparableWithErrorsIs(t *testing.T) {
-	e := &apperrors.Error{Code: "test", Message: "test"}
+	e := &qerrors.Error{Code: "test", Message: "test"}
 	var _ error = e
 
 	if !errors.Is(e, e) {

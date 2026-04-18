@@ -75,7 +75,7 @@ cd examples/proto-demo && buf generate
 
 从 proto enum + `errdesc.http_status` / `errdesc.error_message` 注解自动生成错误码常量和无参构造函数。
 
-生成 `<enum_name>_errors.go` 文件，包含：错误码常量（`XxxCode`）、构造函数（`func Xxx() *apperrors.Error`）、WithDetails 变体（`func XxxWithDetails(details any) *apperrors.Error`）。Code/Message/StatusCode 全部来自 proto 定义，构造函数无参数。
+生成 `<enum_name>_errors.go` 文件，包含：错误码常量（`XxxCode`）、构造函数（`func Xxx() *qerrors.Error`）、WithDetails 变体（`func XxxWithDetails(details any) *qerrors.Error`）。Code/Message/StatusCode 全部来自 proto 定义，构造函数无参数。
 
 用户 proto 文件需 import `errdesc/errdesc.proto`。无 `errdesc` 注解的 enum 不会被生成。
 

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,7 +34,7 @@ func TestHandlerNilReturn(t *testing.T) {
 func TestHandlerReturnsAppError(t *testing.T) {
 	r := gin.New()
 	r.GET("/test", Handler(func(c *gin.Context) error {
-		return apperrors.NotFound("user_not_found", "用户不存在")
+		return qerrors.NotFound("user_not_found", "用户不存在")
 	}))
 
 	w := httptest.NewRecorder()
@@ -49,7 +49,7 @@ func TestHandlerReturnsAppError(t *testing.T) {
 func TestHandlerReturnsAppErrorSetsContext(t *testing.T) {
 	r := gin.New()
 	r.GET("/test", Handler(func(c *gin.Context) error {
-		return apperrors.BadRequest("param_invalid", "参数验证失败")
+		return qerrors.BadRequest("param_invalid", "参数验证失败")
 	}))
 
 	w := httptest.NewRecorder()
@@ -80,7 +80,7 @@ func TestHandlerAbortsSubsequentHandlers(t *testing.T) {
 	r := gin.New()
 	secondCalled := false
 	r.GET("/test", Handler(func(c *gin.Context) error {
-		return apperrors.Forbidden("access_denied", "没有权限")
+		return qerrors.Forbidden("access_denied", "没有权限")
 	}), func(c *gin.Context) {
 		secondCalled = true
 	})
@@ -96,15 +96,15 @@ func TestHandlerAbortsSubsequentHandlers(t *testing.T) {
 
 func TestHandlerAppErrorInContext(t *testing.T) {
 	r := gin.New()
-	var capturedErr *apperrors.Error
+	var capturedErr *qerrors.Error
 	r.Use(func(c *gin.Context) {
 		c.Next()
 		if raw, ok := c.Get("app_error"); ok {
-			capturedErr = raw.(*apperrors.Error)
+			capturedErr = raw.(*qerrors.Error)
 		}
 	})
 	r.GET("/test", Handler(func(c *gin.Context) error {
-		return apperrors.Unauthorized("token_expired", "令牌已过期")
+		return qerrors.Unauthorized("token_expired", "令牌已过期")
 	}))
 
 	w := httptest.NewRecorder()
@@ -147,12 +147,12 @@ func TestSetAppErrorHideInternalErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			HideInternalErrors = tt.hide
 
-			var capturedErr *apperrors.Error
+			var capturedErr *qerrors.Error
 			r := gin.New()
 			r.Use(func(c *gin.Context) {
 				c.Next()
 				if raw, ok := c.Get("app_error"); ok {
-					capturedErr = raw.(*apperrors.Error)
+					capturedErr = raw.(*qerrors.Error)
 				}
 			})
 			r.GET("/test", Handler(func(c *gin.Context) error {

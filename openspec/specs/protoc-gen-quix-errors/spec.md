@@ -34,11 +34,11 @@
 - **THEN** MUST 生成常量 `UserErrorCodeUnspecified = "USER_ERROR_UNSPECIFIED"`
 
 ### Requirement: 错误构造函数生成（无参）
-插件 SHALL 为每个非零值 enum 值生成无参错误构造函数，返回 `*apperrors.Error`。Code、Message、StatusCode 均来自 proto 定义。
+插件 SHALL 为每个非零值 enum 值生成无参错误构造函数，返回 `*qerrors.Error`。Code、Message、StatusCode 均来自 proto 定义。
 
 #### Scenario: 无参构造函数
 - **WHEN** enum 值为 `USER_NOT_FOUND = 1 [(quix.errors.http_status) = 404, (quix.errors.error_message) = "用户不存在"]`
-- **THEN** MUST 生成函数 `func UserNotFound() *apperrors.Error`，Code 为 `"USER_NOT_FOUND"`，Message 为 `"用户不存在"`，StatusCode 为 404
+- **THEN** MUST 生成函数 `func UserNotFound() *qerrors.Error`，Code 为 `"USER_NOT_FOUND"`，Message 为 `"用户不存在"`，StatusCode 为 404
 
 #### Scenario: 零值不生成构造函数
 - **WHEN** enum 零值为 `USER_ERROR_UNSPECIFIED = 0`
@@ -57,7 +57,7 @@
 
 #### Scenario: WithDetails 函数
 - **WHEN** enum 值为 `USER_INVALID_INPUT = 4 [(quix.errors.http_status) = 400, (quix.errors.error_message) = "参数验证失败"]`
-- **THEN** MUST 生成函数 `func UserInvalidInputWithDetails(details any) *apperrors.Error`，Code、Message、StatusCode 与无参版本一致，Details 为传入值
+- **THEN** MUST 生成函数 `func UserInvalidInputWithDetails(details any) *qerrors.Error`，Code、Message、StatusCode 与无参版本一致，Details 为传入值
 
 ### Requirement: 函数命名规则
 插件 SHALL 将 enum 值转换为 PascalCase 函数名，去掉 enum 前缀。
@@ -96,12 +96,12 @@
 - **WHEN** 同一 proto 文件有 `UserError` 和 `OrderError` 两个带注解的 enum
 - **THEN** MUST 生成两个文件 `user_error_errors.go` 和 `order_error_errors.go`
 
-### Requirement: 生成代码导入 apperrors
-生成的代码 SHALL import `github.com/fztcjjl/quix/core/errors` 并使用别名 `apperrors`。
+### Requirement: 生成代码导入 qerrors
+生成的代码 SHALL import `github.com/fztcjjl/quix/core/errors` 并使用别名 `qerrors`。
 
 #### Scenario: import 别名
 - **WHEN** 查看生成的 `_errors.go` 文件
-- **THEN** MUST 包含 `import apperrors "github.com/fztcjjl/quix/core/errors"`
+- **THEN** MUST 包含 `import qerrors "github.com/fztcjjl/quix/core/errors"`
 
 ### Requirement: buf 兼容
 插件 SHALL 完全兼容 buf 的 `buf generate` 命令。

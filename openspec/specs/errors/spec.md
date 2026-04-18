@@ -30,7 +30,7 @@
 - **THEN** JSON 序列化时 MUST 不包含 `StatusCode` 字段
 
 ### Requirement: Predefined error functions
-框架 SHALL 提供常用预定义错误创建函数，每个函数返回带默认 StatusCode 的 `*Error`。
+框架 SHALL 提供常用预定义错误创建函数，每个函数返回带默认 StatusCode 的 `*Error`。生成的代码 import 时 SHALL 使用别名 `qerrors`（`import qerrors "github.com/fztcjjl/quix/core/errors"`）。
 
 #### Scenario: Available predefined errors
 - **WHEN** 开发者调用 `errors.BadRequest()`、`errors.NotFound()`、`errors.Unauthorized()`、`errors.Internal()`、`errors.Forbidden()`
@@ -43,6 +43,10 @@
 #### Scenario: Default StatusCode for predefined errors
 - **WHEN** 调用 `errors.BadRequest()`、`errors.Unauthorized()`、`errors.Forbidden()`、`errors.NotFound()`、`errors.Internal()`
 - **THEN** StatusCode MUST 分别为 400、401、403、404、500
+
+#### Scenario: Import alias in generated code
+- **WHEN** 生成的错误码代码引用 `core/errors` 包
+- **THEN** MUST 使用别名 `qerrors`（`import qerrors "github.com/fztcjjl/quix/core/errors"`）
 
 ### Requirement: Predefined error wrap functions
 框架 SHALL 为每个预定义错误函数提供 Wrap 变体（如 `BadRequestWrap`、`NotFoundWrap`），支持包装底层错误。Wrap 函数 MUST 返回与原函数相同的 StatusCode 和 Code，并设置 `cause` 字段。

@@ -1,7 +1,7 @@
 package server
 
 import (
-	apperrors "github.com/fztcjjl/quix/core/errors"
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -19,9 +19,9 @@ func (c *Context) SetError(err error) {
 
 // GetError retrieves the stored error from the gin context.
 // Returns nil if no error was stored.
-func (c *Context) GetError() *apperrors.Error {
+func (c *Context) GetError() *qerrors.Error {
 	if raw, exists := c.Get("app_error"); exists {
-		if appErr, ok := raw.(*apperrors.Error); ok {
+		if appErr, ok := raw.(*qerrors.Error); ok {
 			return appErr
 		}
 	}

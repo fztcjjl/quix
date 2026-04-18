@@ -15,12 +15,12 @@ var parsedTemplate = template.Must(
 	template.New("errors").Funcs(template.FuncMap{
 		"toPascalCase": toPascalCase,
 		"toSnakeCase":  toSnakeCase,
-		"apperrorsPkg": apperrorsImportPath,
+		"qerrorsPkg":   qerrorsImportPath,
 	}).Parse(errorsTemplate),
 )
 
-// apperrorsImportPath returns the Go import path for the apperrors package.
-func apperrorsImportPath() string {
+// qerrorsImportPath returns the Go import path for the qerrors package.
+func qerrorsImportPath() string {
 	return "github.com/fztcjjl/quix/core/errors"
 }
 
