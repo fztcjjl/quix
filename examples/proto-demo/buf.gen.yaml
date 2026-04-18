@@ -1,6 +1,9 @@
 version: v2
 managed:
   enabled: true
+  disable:
+    - file_option: go_package_prefix
+      module: buf.build/bufbuild/protovalidate
 plugins:
   - protoc_builtin: go
     out: gen
@@ -11,10 +14,6 @@ plugins:
     opt:
       - paths=source_relative
   - local: protoc-gen-quix-errors
-    out: gen
-    opt:
-      - paths=source_relative
-  - remote: buf.build/bufbuild/validate-go
     out: gen
     opt:
       - paths=source_relative

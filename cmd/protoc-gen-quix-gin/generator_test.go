@@ -471,7 +471,7 @@ func TestGenerate_DeleteWithBody_Error(t *testing.T) {
 	}
 }
 
-func TestGenerate_BodyStarPathVarSameName_Warn(t *testing.T) {
+func TestGenerate_BodyStarPathVarSameName_ConflictCheck(t *testing.T) {
 	opts := &descriptorpb.MethodOptions{}
 	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
 		Pattern: &annotations.HttpRule_Post{
@@ -481,7 +481,7 @@ func TestGenerate_BodyStarPathVarSameName_Warn(t *testing.T) {
 	})
 
 	protoFile := &descriptorpb.FileDescriptorProto{
-		Name:    proto.String("test_warn.proto"),
+		Name:    proto.String("test_conflict.proto"),
 		Package: proto.String("test"),
 		Syntax:  proto.String("proto3"),
 		Options: &descriptorpb.FileOptions{
@@ -517,24 +517,24 @@ func TestGenerate_BodyStarPathVarSameName_Warn(t *testing.T) {
 		},
 	}
 
-	resp, stderr := runGenerate(t, protoFile)
-	// Should NOT be an error — warning should not stop generation
+	resp, _ := runGenerate(t, protoFile)
 	if resp.GetError() != "" {
-		t.Fatalf("expected no plugin error for warning case, got: %s", resp.GetError())
+		t.Fatalf("expected no plugin error, got: %s", resp.GetError())
 	}
 	if len(resp.File) == 0 {
 		t.Fatal("expected generated output file, got none")
 	}
-	// Should have warning on stderr
-	if !strings.Contains(stderr, "warning:") {
-		t.Errorf("expected warning on stderr, got: %s", stderr)
+	// Should generate ShouldBindUriConflictCheck since path var "id" matches body field "id"
+	generated := resp.File[0].GetContent()
+	if !strings.Contains(generated, "ShouldBindUriConflictCheck") {
+		t.Errorf("expected ShouldBindUriConflictCheck in generated code, got: %s", generated)
 	}
-	if !strings.Contains(stderr, "same name as body field") {
-		t.Errorf("warning should mention same name conflict, got: %s", stderr)
+	if strings.Contains(generated, "ShouldBindUri(") {
+		t.Errorf("should NOT use plain ShouldBindUri when path var conflicts with body field, got: %s", generated)
 	}
 }
 
-func TestGenerate_BodyStarPathVarDifferentName_NoWarn(t *testing.T) {
+func TestGenerate_BodyStarPathVarDifferentName_PlainUri(t *testing.T) {
 	opts := &descriptorpb.MethodOptions{}
 	proto.SetExtension(opts, annotations.E_Http, &annotations.HttpRule{
 		Pattern: &annotations.HttpRule_Post{
@@ -544,7 +544,7 @@ func TestGenerate_BodyStarPathVarDifferentName_NoWarn(t *testing.T) {
 	})
 
 	protoFile := &descriptorpb.FileDescriptorProto{
-		Name:    proto.String("test_no_warn.proto"),
+		Name:    proto.String("test_no_conflict.proto"),
 		Package: proto.String("test"),
 		Syntax:  proto.String("proto3"),
 		Options: &descriptorpb.FileOptions{
@@ -579,11 +579,19 @@ func TestGenerate_BodyStarPathVarDifferentName_NoWarn(t *testing.T) {
 		},
 	}
 
-	resp, stderr := runGenerate(t, protoFile)
+	resp, _ := runGenerate(t, protoFile)
 	if resp.GetError() != "" {
 		t.Fatalf("expected no plugin error, got: %s", resp.GetError())
 	}
-	if strings.Contains(stderr, "warning:") {
-		t.Errorf("expected no warning for different names, got: %s", stderr)
+	if len(resp.File) == 0 {
+		t.Fatal("expected generated output file, got none")
+	}
+	// Should generate plain ShouldBindUri since path var "user_id" doesn't match any field
+	generated := resp.File[0].GetContent()
+	if !strings.Contains(generated, "ShouldBindUri(") {
+		t.Errorf("expected ShouldBindUri in generated code, got: %s", generated)
+	}
+	if strings.Contains(generated, "ShouldBindUriConflictCheck") {
+		t.Errorf("should NOT use ShouldBindUriConflictCheck when path var doesn't match body field, got: %s", generated)
 	}
 }

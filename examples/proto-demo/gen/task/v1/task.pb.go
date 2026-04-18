@@ -7,6 +7,7 @@
 package taskv1
 
 import (
+	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
 	_ "github.com/fztcjjl/quix/examples/proto-demo/gen/errors"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -350,20 +351,21 @@ var File_task_v1_task_proto protoreflect.FileDescriptor
 
 const file_task_v1_task_proto_rawDesc = "" +
 	"\n" +
-	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x13errors/errors.proto\"Y\n" +
+	"\x12task/v1/task.proto\x12\atask.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x13errors/errors.proto\x1a\x1bbuf/validate/validate.proto\"Y\n" +
 	"\x04Task\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12+\n" +
-	"\x06status\x18\x03 \x01(\x0e2\x13.task.v1.TaskStatusR\x06status\")\n" +
-	"\x11CreateTaskRequest\x12\x14\n" +
-	"\x05title\x18\x01 \x01(\tR\x05title\")\n" +
-	"\x0eGetTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x12\n" +
+	"\x06status\x18\x03 \x01(\x0e2\x13.task.v1.TaskStatusR\x06status\"5\n" +
+	"\x11CreateTaskRequest\x12 \n" +
+	"\x05title\x18\x01 \x01(\tB\n" +
+	"\xbaH\ar\x05\x10\x01\x18\xc8\x01R\x05title\"2\n" +
+	"\x0eGetTaskRequest\x12 \n" +
+	"\atask_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06taskId\"\x12\n" +
 	"\x10ListTasksRequest\"/\n" +
 	"\bTaskList\x12#\n" +
-	"\x05tasks\x18\x01 \x03(\v2\r.task.v1.TaskR\x05tasks\",\n" +
-	"\x11DeleteTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId*U\n" +
+	"\x05tasks\x18\x01 \x03(\v2\r.task.v1.TaskR\x05tasks\"5\n" +
+	"\x11DeleteTaskRequest\x12 \n" +
+	"\atask_id\x18\x01 \x01(\tB\a\xbaH\x04r\x02\x10\x01R\x06taskId*U\n" +
 	"\n" +
 	"TaskStatus\x12\x1b\n" +
 	"\x17TASK_STATUS_UNSPECIFIED\x10\x00\x12\x14\n" +

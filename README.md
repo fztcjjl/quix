@@ -10,6 +10,7 @@
 - **统一接口** — 每个能力定义最小化接口，第三方库通过适配器接入
 - **可插拔组件** — Logger、Config、Metrics、Tracing、Auth 均可替换
 - **IDL 驱动** — 通过 `protoc-gen-quix-gin` 插件从 protobuf 自动生成 Gin 路由代码
+- **请求校验** — 集成 protovalidate-go，通过 proto 注解定义校验规则，自动执行字段验证
 
 ## 技术栈
 
@@ -20,6 +21,7 @@
 | 配置 | [koanf](https://github.com/knadh/koanf) |
 | 指标/追踪 | [OpenTelemetry](https://opentelemetry.io/) |
 | IDL | [protobuf](https://protobuf.dev/) + [google.api.http](https://aip.dev/4320) |
+| 校验 | [protovalidate-go](https://github.com/bufbuild/protovalidate-go) |
 
 ## 快速开始
 
@@ -122,6 +124,21 @@ app.GET("/user/:id", qhttp.Handler(func(c *gin.Context) error {
 ### HTTP Server
 
 内置 Recovery、RequestID、ResponseMiddleware 中间件，支持优雅关闭和信号处理。通过 `qhttp.Handler()` 包装支持 `func(c *gin.Context) error` 签名。
+
+### 请求校验
+
+集成 [protovalidate-go](https://github.com/bufbuild/protovalidate-go)，通过 proto 注解定义校验规则，生成的 handler 自动执行字段验证：
+
+```protobuf
+message CreateTaskRequest {
+  string title = 1 [(buf.validate.field).string = {
+    min_len: 1
+    max_len: 200
+  }];
+}
+```
+
+校验失败返回结构化 400 响应：`{"error": {"code": "validation_error", "message": "请求参数验证失败", "details": [{"field": "title", "message": "..."}]}}`
 
 ## 开发
 

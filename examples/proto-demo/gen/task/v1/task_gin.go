@@ -43,6 +43,10 @@ func _TaskService_CreateTask0_HTTP_Handler(svc TaskServiceHTTPService) gin.Handl
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		rsp, err = svc.CreateTask(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -72,6 +76,10 @@ func _TaskService_GetTask0_HTTP_Handler(svc TaskServiceHTTPService) gin.HandlerF
 		req := new(GetTaskRequest)
 		var rsp *Task
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}
@@ -107,6 +115,10 @@ func _TaskService_ListTasks0_HTTP_Handler(svc TaskServiceHTTPService) gin.Handle
 			c.SetError(err)
 			return
 		}
+		if err = runtime.ValidateRequest(req); err != nil {
+			c.SetError(err)
+			return
+		}
 		rsp, err = svc.ListTasks(c.Request.Context(), req)
 		if err != nil {
 			c.SetError(err)
@@ -136,6 +148,10 @@ func _TaskService_DeleteTask0_HTTP_Handler(svc TaskServiceHTTPService) gin.Handl
 		req := new(DeleteTaskRequest)
 		var rsp *Task
 		if err = shouldBind(req); err != nil {
+			c.SetError(err)
+			return
+		}
+		if err = runtime.ValidateRequest(req); err != nil {
 			c.SetError(err)
 			return
 		}

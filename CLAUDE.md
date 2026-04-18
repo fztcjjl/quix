@@ -56,6 +56,7 @@ quix/
 - **完成一组任务后必须 lint**: 每完成一个任务组（如接口定义、实现、测试），必须执行 `golangci-lint run ./...`
 - **错误处理模式**: Handler 返回 error，由 `qhttp.Handler()` 包装为 gin.HandlerFunc，`ResponseMiddleware` 统一格式化 `{"error": {...}}` 响应
 - **可观测性**: 通过 `quix.WithTelemetry()` 启用 OpenTelemetry（Traces + Metrics），默认关闭。otelgin 中间件自动创建 span 和 HTTP 指标，Logging middleware 自动输出 trace_id 关联调用链
+- **请求校验**: 生成的 handler 在 `ShouldBind*` 后自动调用 `runtime.ValidateRequest(req)`，使用 protovalidate-go 运行时校验 proto 注解定义的字段规则（`buf.validate.field`）。无校验注解的消息自动跳过（no-op）
 
 ## protoc-gen-quix-gin 插件
 
@@ -67,6 +68,8 @@ cd examples/proto-demo && buf generate
 ```
 
 生成 `xxx_gin.go` 文件，包含：服务接口（`XxxHTTPService`）、路由注册函数（`RegisterXxxHTTPService`）、handler 函数（使用 `runtime.Context` 包装器）。
+
+生成的 handler 自动在请求绑定后调用 `runtime.ValidateRequest(req)` 进行字段校验，校验规则通过 proto 注解定义（`buf.validate.field`），使用 protovalidate-go 运行时 CEL 引擎执行。
 
 ## protoc-gen-quix-errors 插件
 
@@ -96,6 +99,7 @@ cd examples/proto-demo && buf generate
 - 配置: koanf
 - 指标/追踪: OpenTelemetry（可选，`core/telemetry` 包，otelgin 中间件，OTLP exporter）
 - IDL: protobuf + `google.api.http` 注解
+- 校验: protovalidate-go（`buf.validate.field` 注解，运行时 CEL 引擎）
 - 测试: testify（断言）、go-cmp（diff）、Golden File（插件测试）
 - Go 版本: 1.25
 

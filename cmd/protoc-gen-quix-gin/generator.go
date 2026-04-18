@@ -11,6 +11,12 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// bindErrorf reports an error via plugin.Error (displayed in red by protoc/buf)
+// and terminates code generation.
+func bindErrorf(plugin *protogen.Plugin, format string, args ...any) {
+	plugin.Error(fmt.Errorf(format, args...))
+}
+
 func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 	data := FileData{
 		PackageName: string(file.GoPackageName),
@@ -86,7 +92,8 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 					return
 				}
 
-				// Warn when body "*" and path variables share names with input message fields
+				// Detect when body "*" and path variables share names with input message fields.
+				// When true, the generated handler uses ShouldBindUriConflictCheck instead of ShouldBindUri.
 				pathVarConflict := false
 				if binding.Body == "*" {
 					pathVars := ExtractPathVars(binding.Path)
@@ -94,9 +101,6 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 						for _, field := range method.Input.Fields {
 							if string(field.Desc.Name()) == pv {
 								pathVarConflict = true
-								bindWarnf("method %s.%s: path variable %q has same name as body field, potential conflict; "+
-									"consider using body: \"<field>\" to specify the body field explicitly",
-									svc.GoName, method.GoName, pv)
 								break
 							}
 						}

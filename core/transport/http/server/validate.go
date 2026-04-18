@@ -4,14 +4,10 @@ import (
 	"errors"
 	"net/http"
 
+	protovalidate "buf.build/go/protovalidate"
 	apperrors "github.com/fztcjjl/quix/core/errors"
+	"google.golang.org/protobuf/proto"
 )
-
-// Validator is implemented by proto messages that have validation rules.
-// protoc-gen-validate generates Validate() methods with this signature.
-type Validator interface {
-	Validate() error
-}
 
 // FieldViolation represents a single field validation failure.
 type FieldViolation struct {
@@ -19,50 +15,44 @@ type FieldViolation struct {
 	Message string `json:"message"`
 }
 
-// fieldViolation is the interface used to extract field-level details
-// from protoc-gen-validate errors without importing the validate package.
-type fieldViolation interface {
-	Field() string
-	Reason() string
-}
-
-// multiError is the interface used to unwrap multiple validation errors
-// from protoc-gen-validate without importing the validate package.
-type multiError interface {
-	Unwrap() []error
-}
-
-// ValidateRequest checks if req implements Validator and calls Validate().
-// Returns nil if req does not implement Validator (no validation rules).
+// ValidateRequest checks if req is a proto message and validates it using protovalidate.
+// Returns nil if req is not a proto.Message (no validation rules).
 // Translates validation errors to *apperrors.Error with HTTP 400.
 func ValidateRequest(req any) error {
-	v, ok := req.(Validator)
+	msg, ok := req.(proto.Message)
 	if !ok {
 		return nil
 	}
-	if err := v.Validate(); err != nil {
+	if err := protovalidate.Validate(msg); err != nil {
 		return toValidationError(err)
 	}
 	return nil
 }
 
 func toValidationError(err error) *apperrors.Error {
-	var violations []FieldViolation
-
-	// Handle multi-error (multiple field violations)
-	var me multiError
-	if errors.As(err, &me) {
-		for _, e := range me.Unwrap() {
-			if v := extractViolation(e); v != nil {
-				violations = append(violations, *v)
-			}
+	var valErr *protovalidate.ValidationError
+	if !errors.As(err, &valErr) {
+		return &apperrors.Error{
+			Code:       "validation_error",
+			Message:    err.Error(),
+			StatusCode: http.StatusBadRequest,
 		}
-	} else if v := extractViolation(err); v != nil {
-		violations = append(violations, *v)
+	}
+
+	violations := make([]FieldViolation, 0, len(valErr.Violations))
+	for _, v := range valErr.Violations {
+		violations = append(violations, FieldViolation{
+			Field:   protovalidate.FieldPathString(v.Proto.GetField()),
+			Message: v.Proto.GetMessage(),
+		})
 	}
 
 	if len(violations) == 0 {
-		violations = []FieldViolation{{Message: err.Error()}}
+		return &apperrors.Error{
+			Code:       "validation_error",
+			Message:    err.Error(),
+			StatusCode: http.StatusBadRequest,
+		}
 	}
 
 	return &apperrors.Error{
@@ -71,12 +61,4 @@ func toValidationError(err error) *apperrors.Error {
 		Details:    violations,
 		StatusCode: http.StatusBadRequest,
 	}
-}
-
-func extractViolation(err error) *FieldViolation {
-	var fv fieldViolation
-	if errors.As(err, &fv) {
-		return &FieldViolation{Field: fv.Field(), Message: fv.Reason()}
-	}
-	return nil
 }
