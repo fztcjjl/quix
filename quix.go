@@ -67,17 +67,12 @@ func ginModeForEnv(env Environment) string {
 
 // App is the core framework application.
 type App struct {
+	options
 	httpServer             *qhttp.Server
 	rpcServer              transport.Server
-	config                 config.Config
-	env                    Environment
-	defaultMiddleware      bool
-	telemetryOpts          []telemetry.Option
 	telemetryShutdown      func(context.Context) error
 	telemetryServiceName   string
 	telemetryTracesEnabled bool
-	setupFuncs             []func(*App) error
-	shutdownTimeout        time.Duration
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -107,9 +102,12 @@ func New(opts ...Option) *App {
 
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
-		config:          defaultCfg,
-		env:             env,
-		shutdownTimeout: defaultShutdownTimeout,
+		options: options{
+			config:        defaultCfg,
+			env:           env,
+			corsEnabled:   true,
+			shutdownTimeout: defaultShutdownTimeout,
+		},
 	}
 	// Auto-set Gin mode from environment; user options can override via WithGinMode
 	gin.SetMode(ginModeForEnv(app.env))
@@ -149,6 +147,10 @@ func New(opts ...Option) *App {
 				qhttp.WithTelemetryServiceName(app.telemetryServiceName),
 				qhttp.WithTelemetryTracesEnabled(app.telemetryTracesEnabled),
 			)
+		}
+		serverOpts = append(serverOpts, qhttp.WithCORS(app.corsEnabled))
+		if app.corsConfig != nil {
+			serverOpts = append(serverOpts, qhttp.WithCORSConfig(*app.corsConfig))
 		}
 		app.httpServer = qhttp.NewServer(serverOpts...)
 	}

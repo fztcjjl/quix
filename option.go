@@ -8,8 +8,21 @@ import (
 	"github.com/fztcjjl/quix/core/telemetry"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
+
+// options holds all user-configurable settings for the App.
+type options struct {
+	config            config.Config
+	env               Environment
+	defaultMiddleware bool
+	telemetryOpts     []telemetry.Option
+	corsEnabled       bool
+	corsConfig        *cors.Config
+	setupFuncs        []func(*App) error
+	shutdownTimeout   time.Duration
+}
 
 // Option configures the App during creation.
 type Option func(*App)
@@ -57,7 +70,7 @@ func WithEnv(env Environment) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID) is mounted.
+// WithDefaultMiddleware controls whether default middleware (RequestID, CORS, Recovery, Logging, Response) is mounted.
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(a *App) {
 		a.defaultMiddleware = enabled
@@ -87,5 +100,21 @@ func WithSetup(funcs ...func(*App) error) Option {
 func WithShutdownTimeout(d time.Duration) Option {
 	return func(a *App) {
 		a.shutdownTimeout = d
+	}
+}
+
+// WithCORS controls whether CORS middleware is mounted in the default middleware chain.
+// When set to false, CORS middleware is not mounted even if default middleware is enabled.
+func WithCORS(enabled bool) Option {
+	return func(a *App) {
+		a.corsEnabled = enabled
+	}
+}
+
+// WithCORSConfig sets a custom CORS configuration for the default middleware chain.
+// When set, CORS middleware is mounted with this config instead of cors.Default().
+func WithCORSConfig(cfg cors.Config) Option {
+	return func(a *App) {
+		a.corsConfig = &cfg
 	}
 }

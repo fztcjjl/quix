@@ -7,6 +7,7 @@ import (
 
 	"github.com/fztcjjl/quix/core/transport"
 	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -31,6 +32,8 @@ type options struct {
 	idleTimeout            time.Duration
 	telemetryServiceName   string
 	telemetryTracesEnabled bool
+	corsEnabled            bool
+	corsConfig             *cors.Config
 }
 
 // WithAddr sets the server listen address.
@@ -40,7 +43,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (Recovery, RequestID, ResponseMiddleware) is mounted.
+// WithDefaultMiddleware controls whether default middleware (RequestID, CORS, Recovery, Logging, Response) is mounted.
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(o *options) {
 		o.defaultMiddleware = enabled
@@ -89,10 +92,27 @@ func WithTelemetryTracesEnabled(enabled bool) Option {
 	}
 }
 
+// WithCORSConfig sets a custom CORS configuration for the default middleware chain.
+// When set, CORS middleware is mounted with this config instead of cors.Default().
+func WithCORSConfig(cfg cors.Config) Option {
+	return func(o *options) {
+		o.corsConfig = &cfg
+	}
+}
+
+// WithCORS controls whether CORS middleware is mounted in the default middleware chain.
+// When set to false, CORS middleware is not mounted even if default middleware is enabled.
+func WithCORS(enabled bool) Option {
+	return func(o *options) {
+		o.corsEnabled = enabled
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
 	o := &options{
 		defaultMiddleware: true,
+		corsEnabled:       true,
 		readHeaderTimeout: 5 * time.Second,
 	}
 	for _, opt := range opts {
@@ -115,11 +135,18 @@ func NewServer(opts ...Option) *Server {
 	}
 
 	if o.defaultMiddleware {
-		engine.Use(middleware.Recovery())
+		engine.Use(requestid.New())
 		if o.telemetryServiceName != "" && o.telemetryTracesEnabled {
 			engine.Use(otelgin.Middleware(o.telemetryServiceName))
 		}
-		engine.Use(requestid.New(), middleware.Logging(), middleware.ResponseMiddleware())
+		if o.corsEnabled {
+			if o.corsConfig != nil {
+				engine.Use(middleware.WithCORSConfig(*o.corsConfig))
+			} else {
+				engine.Use(middleware.CORS())
+			}
+		}
+		engine.Use(middleware.Recovery(), middleware.Logging(), middleware.ResponseMiddleware())
 	}
 
 	return s
