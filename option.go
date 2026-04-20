@@ -14,14 +14,14 @@ import (
 
 // options holds all user-configurable settings for the App.
 type options struct {
-	config            config.Config
-	env               Environment
-	defaultMiddleware bool
-	telemetryOpts     []telemetry.Option
-	corsEnabled       bool
-	corsConfig        *cors.Config
-	setupFuncs        []func(*App) error
-	shutdownTimeout   time.Duration
+	config           config.Config
+	env              Environment
+	telemetryOpts    []telemetry.Option
+	corsEnabled      bool
+	corsConfig       *cors.Config
+	loggingSkipPaths []string
+	setupFuncs       []func(*App) error
+	shutdownTimeout  time.Duration
 }
 
 // Option configures the App during creation.
@@ -70,13 +70,6 @@ func WithEnv(env Environment) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (RequestID, CORS, Recovery, Logging, Response) is mounted.
-func WithDefaultMiddleware(enabled bool) Option {
-	return func(a *App) {
-		a.defaultMiddleware = enabled
-	}
-}
-
 // WithTelemetry enables OpenTelemetry instrumentation.
 // It initializes TracerProvider and MeterProvider, and configures the App
 // to flush telemetry on shutdown.
@@ -116,5 +109,13 @@ func WithCORS(enabled bool) Option {
 func WithCORSConfig(cfg cors.Config) Option {
 	return func(a *App) {
 		a.corsConfig = &cfg
+	}
+}
+
+// WithLoggingSkipPaths sets paths to skip logging.
+// Paths ending with "/" use prefix matching.
+func WithLoggingSkipPaths(paths ...string) Option {
+	return func(a *App) {
+		a.loggingSkipPaths = paths
 	}
 }

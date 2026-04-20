@@ -42,15 +42,23 @@
 - **THEN** MUST 返回正确的 CORS 响应头
 
 ### Requirement: Default middleware mounting
-App SHALL 默认挂载 Recovery、RequestID、Logging 和 Response 中间件到 HTTP Server。
+HTTP Server SHALL 默认挂载 RequestID、Recovery、CORS、Logging 和 Response 中间件。
 
 #### Scenario: Default middleware mounted automatically
-- **WHEN** 用户调用 `quix.New()` 未传入 `WithDefaultMiddleware(false)`
-- **THEN** HTTP Server MUST 自动挂载 Recovery、RequestID、Logging 和 Response 中间件，顺序为 `Recovery → RequestID → Logging → Response`
+- **WHEN** 用户调用 `quix.New()` 或 `qhttp.NewServer()`
+- **THEN** HTTP Server MUST 自动挂载中间件，顺序为 `RequestID → [otelgin] → Recovery → CORS → Logging → Response`
 
-#### Scenario: Disable default middleware
-- **WHEN** 用户调用 `quix.New(quix.WithDefaultMiddleware(false))`
-- **THEN** HTTP Server MUST 不挂载任何默认中间件
+#### Scenario: CORS disabled
+- **WHEN** 用户调用 `quix.New(quix.WithCORS(false))`
+- **THEN** HTTP Server MUST 不挂载 CORS 中间件
+
+#### Scenario: Custom CORS at App level
+- **WHEN** 用户调用 `quix.New(quix.WithCORSConfig(cfg))`
+- **THEN** HTTP Server MUST 使用自定义 `cors.Config` 挂载 CORS 中间件
+
+#### Scenario: Skip logging paths
+- **WHEN** 用户调用 `quix.New(quix.WithLoggingSkipPaths("/healthz"))`
+- **THEN** Logging 中间件 MUST 跳过 `/healthz` 路径不输出日志
 
 ### Requirement: Logging middleware
 框架 SHALL 提供 Logging 中间件，为每个 HTTP 请求输出结构化 access log。
@@ -79,15 +87,15 @@ App SHALL 默认挂载 Recovery、RequestID、Logging 和 Response 中间件到 
 Logging 中间件 SHALL 支持跳过指定路径，不输出日志。
 
 #### Scenario: Skip exact path
-- **WHEN** 用户调用 `middleware.Logging("/healthz")` 且请求路径为 `/healthz`
+- **WHEN** 用户调用 `middleware.LoggingWith(middleware.WithSkipPaths("/healthz"))` 且请求路径为 `/healthz`
 - **THEN** MUST 不输出任何日志
 
 #### Scenario: Non-skipped path logged
-- **WHEN** 用户调用 `middleware.Logging("/healthz")` 且请求路径为 `/api/users`
+- **WHEN** 用户调用 `middleware.LoggingWith(middleware.WithSkipPaths("/healthz"))` 且请求路径为 `/api/users`
 - **THEN** MUST 正常输出日志
 
 #### Scenario: No skip paths configured
-- **WHEN** 用户调用 `middleware.Logging()` 不传入跳过路径
+- **WHEN** 用户调用 `middleware.Logging()` 或 `middleware.LoggingWith()` 不传入 WithSkipPaths
 - **THEN** MUST 对所有请求输出日志
 
 ### Requirement: Middleware usage examples

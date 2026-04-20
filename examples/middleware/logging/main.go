@@ -4,14 +4,12 @@ import (
 	"net/http"
 
 	quix "github.com/fztcjjl/quix"
-	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
 )
 
 func main() {
-	// Use custom middleware to demonstrate skip paths
-	app := quix.New(quix.WithDefaultMiddleware(false))
-	app.Use(middleware.Recovery(), middleware.Logging("/healthz"))
+	// Use WithLoggingSkipPaths to skip logging for specific paths
+	app := quix.New(quix.WithLoggingSkipPaths("/healthz"))
 
 	app.GET("/ok", func(c *gin.Context) {
 		c.String(http.StatusOK, "ok")

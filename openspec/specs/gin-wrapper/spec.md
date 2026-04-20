@@ -116,7 +116,7 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 - **THEN** MUST 启动 HTTP 服务，可通过 curl 访问
 
 ### Requirement: Handler wrapper
-框架 SHALL 在 `core/transport/http/server/` 包中提供 `Handler()` 函数和 `SetAppError()` 函数。`SetAppError` SHALL 是错误处理的核心实现，`Handler()` 委托调用 `SetAppError`。
+框架 SHALL 在 `core/transport/http/server/` 包中提供 `Handler()` 函数，将 `func(*gin.Context) error` 签名包装为 `gin.HandlerFunc`。Handler 仅负责将错误存入 gin context，错误包装和响应格式化由 ResponseMiddleware 统一处理。
 
 #### Scenario: Handler returns nil
 - **WHEN** handler 返回 nil
@@ -124,33 +124,14 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 
 #### Scenario: Handler returns *Error
 - **WHEN** handler 返回 `errors.NotFound("user_not_found", "用户不存在")`
-- **THEN** MUST 将 Error 存入 `c.Get("app_error")`，并设置 HTTP status 为 Error.StatusCode（404）
+- **THEN** MUST 将 Error 存入 `c.Set("app_error", err)`，由 ResponseMiddleware 设置 HTTP status 和格式化响应
 
 #### Scenario: Handler returns standard error
 - **WHEN** handler 返回 `fmt.Errorf("db connection failed")`
-- **THEN** MUST 自动包装为 `*Error{Code: "internal_error", StatusCode: 500}`，存入 app_error，HTTP status 为 500
-  - dev/test 模式：Message 为原始错误消息（"db connection failed"），cause 为原始 error
-  - prod/staging 模式：Message 为 "Internal Server Error"，cause 为原始 error（原始消息不暴露给客户端）
-
-#### Scenario: Handler wrapper prevents subsequent handlers
-- **WHEN** handler 返回非 nil error
-- **THEN** 后续 handler MUST 不执行
-
-### Requirement: SetAppError 公共错误处理函数
-框架 SHALL 在 `core/transport/http/server/errors.go` 中提供 `SetAppError(c *gin.Context, err error)` 函数，作为统一的错误处理入口。
-
-#### Scenario: SetAppError with qerrors.Error
-- **WHEN** 调用 `SetAppError(c, &qerrors.Error{Code: "not_found", StatusCode: 404})`
-- **THEN** MUST 将 error 存入 `c.Set("app_error", err)`，并调用 `c.AbortWithStatus(404)`
-
-#### Scenario: SetAppError with standard error
-- **WHEN** 调用 `SetAppError(c, fmt.Errorf("db failed"))`
-- **THEN** MUST 包装为 `*Error{Code: "internal_error", StatusCode: 500, cause: err}`，存入 app_error，并调用 `c.AbortWithStatus(500)`
-  - 当 `HideInternalErrors` 为 true（prod/staging）时：Message 为 "Internal Server Error"
-  - 当 `HideInternalErrors` 为 false（dev/test）时：Message 为原始错误消息
+- **THEN** MUST 将原始 error 存入 `app_error`，由 ResponseMiddleware 包装为 `*Error{Code: "internal_error", StatusCode: 500}` 并格式化响应
 
 ### Requirement: HideInternalErrors controls internal error exposure
-框架 SHALL 提供 `server.HideInternalErrors` 包级变量，控制 `SetAppError` 是否向客户端隐藏非 `qerrors.Error` 类型的原始错误消息。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动设置为 true。
+框架 SHALL 提供 `middleware.HideInternalErrors` 包级变量，控制 ResponseMiddleware 是否向客户端隐藏非 `qerrors.Error` 类型的原始错误消息。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动设置为 true。
 
 #### Scenario: Production hides internal error
 - **WHEN** `QUIX_ENV=prod` 且 handler 返回 `fmt.Errorf("connection refused: host=db.internal:5432")`
@@ -161,34 +142,36 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 - **THEN** 响应 body 中的 Message MUST 为 "connection refused"
 
 ### Requirement: ResponseMiddleware
-框架 SHALL 提供 ResponseMiddleware，统一格式化错误响应。ResponseMiddleware MUST 对 `app_error` 进行安全类型断言（comma-ok），防止非 `*qerrors.Error` 类型导致 panic。
+框架 SHALL 提供 ResponseMiddleware，作为错误处理的核心：检测 `app_error`、包装非结构化错误、控制内部错误消息暴露、统一格式化 `{"error": {...}}` 响应。
 
-#### Scenario: Error response format
-- **WHEN** handler 中返回了错误且 ResponseMiddleware 已挂载
-- **THEN** 响应体 MUST 为 `{"error": {...}}`，HTTP status 为 Error.StatusCode
+#### Scenario: Error response format with *qerrors.Error
+- **WHEN** handler 中返回了 `*qerrors.Error` 且 ResponseMiddleware 已挂载
+- **THEN** 响应体 MUST 为 `{"error": {...}}`，HTTP status 为 Error.StatusCode，直接使用 Error 的 Code/Message/Details
+
+#### Scenario: Standard error wrapped by ResponseMiddleware
+- **WHEN** handler 返回非 `*qerrors.Error` 的标准 error
+- **THEN** ResponseMiddleware MUST 自动包装为 `*Error{Code: "internal_error", StatusCode: 500, Message: err.Error()}`，并设置对应 HTTP status
+  - 当 `HideInternalErrors` 为 true 时：Message 为 "Internal Server Error"
+  - 当 `HideInternalErrors` 为 false 时：Message 为原始错误消息
 
 #### Scenario: No error skips formatting
 - **WHEN** handler 正常执行且未返回错误
 - **THEN** ResponseMiddleware MUST 不写入任何响应（成功响应由 handler 直接处理）
 
-#### Scenario: Non-qerrors.Error in context
-- **WHEN** `app_error` 存储了非 `*qerrors.Error` 类型的值
-- **THEN** MUST 返回 HTTP 500 且不 panic（而非直接断言崩溃）
-
 ### Requirement: HTTP Server default middleware
-HTTP Server 创建时 SHALL 默认挂载 Recovery、RequestID 和 ResponseMiddleware 中间件，可通过 Option 关闭。
+HTTP Server 创建时 SHALL 默认挂载 RequestID、Recovery、CORS、Logging 和 ResponseMiddleware 中间件。
 
 #### Scenario: Default middleware mounted
-- **WHEN** 创建 HTTP Server 且未传入 `server.WithDefaultMiddleware(false)`
-- **THEN** MUST 在 Engine 上挂载 Recovery、RequestID 和 ResponseMiddleware 中间件
+- **WHEN** 创建 HTTP Server
+- **THEN** MUST 在 Engine 上挂载 RequestID、Recovery、CORS、Logging 和 ResponseMiddleware 中间件
 
 #### Scenario: Default middleware order
-- **WHEN** 创建 HTTP Server 且默认中间件未禁用
-- **THEN** 中间件挂载顺序 MUST 为 Recovery → RequestID → ResponseMiddleware
+- **WHEN** 创建 HTTP Server 且启用了 OpenTelemetry
+- **THEN** 中间件挂载顺序 MUST 为 RequestID → otelgin → Recovery → CORS → Logging → ResponseMiddleware
 
-#### Scenario: Disable default middleware
-- **WHEN** 创建 HTTP Server 时传入 `server.WithDefaultMiddleware(false)`
-- **THEN** MUST 不挂载任何默认中间件
+#### Scenario: Default middleware order without OTel
+- **WHEN** 创建 HTTP Server 且未启用 OpenTelemetry
+- **THEN** 中间件挂载顺序 MUST 为 RequestID → Recovery → CORS → Logging → ResponseMiddleware
 
 #### Scenario: Default middleware recovers panic
 - **WHEN** 使用默认中间件的 Server 处理请求时 handler 发生 panic

@@ -1,7 +1,6 @@
 package server
 
 import (
-	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -11,18 +10,18 @@ type Context struct {
 	*gin.Context
 }
 
-// SetError stores an error in the gin context and aborts the request.
-// It delegates to SetAppError for consistent error handling.
+// SetError stores an error in the gin context.
+// The error will be picked up by ResponseMiddleware to format the response.
 func (c *Context) SetError(err error) {
-	SetAppError(c.Context, err)
+	c.Set("app_error", err)
 }
 
 // GetError retrieves the stored error from the gin context.
 // Returns nil if no error was stored.
-func (c *Context) GetError() *qerrors.Error {
-	if raw, exists := c.Get("app_error"); exists {
-		if appErr, ok := raw.(*qerrors.Error); ok {
-			return appErr
+func (c *Context) GetError() error {
+	if val, exists := c.Get("app_error"); exists {
+		if err, ok := val.(error); ok {
+			return err
 		}
 	}
 	return nil

@@ -153,7 +153,7 @@ func TestLoggingSkipPaths(t *testing.T) {
 	cap := &captureLogger{}
 	log.SetDefault(cap)
 
-	r := setupRouter(Logging("/healthz"))
+	r := setupRouter(Logging(WithSkipPaths("/healthz")))
 
 	// Request to skipped path
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -298,7 +298,7 @@ func TestLoggingWithSkipPathsPrefixMatch(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(LoggingWith(WithSkipPaths("/metrics/")))
+	r.Use(Logging(WithSkipPaths("/metrics/")))
 	r.GET("/metrics/health", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	r.GET("/metrics", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
@@ -352,7 +352,7 @@ func TestLoggingWithHook(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(LoggingWith(WithHook(func(c *gin.Context, fields map[string]any) {
+	r.Use(Logging(WithHook(func(c *gin.Context, fields map[string]any) {
 		hookCalled = true
 		hookFields = fields
 		fields["custom_key"] = "custom_val"

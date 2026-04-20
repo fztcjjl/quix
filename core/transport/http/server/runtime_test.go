@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	qerrors "github.com/fztcjjl/quix/core/errors"
+	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 )
@@ -15,6 +16,7 @@ import (
 func TestSetError_WithAppError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	r.Use(middleware.ResponseMiddleware())
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		err := &qerrors.Error{Code: "not_found", Message: "not found", StatusCode: 404}
@@ -31,7 +33,7 @@ func TestSetError_WithAppError(t *testing.T) {
 func TestSetError_GetError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	var retrieved *qerrors.Error
+	var retrieved error
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		err := &qerrors.Error{Code: "bad_request", Message: "invalid param", StatusCode: 400}
@@ -44,15 +46,16 @@ func TestSetError_GetError(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.NotNil(t, retrieved)
-	assert.Equal(t, "bad_request", retrieved.Code)
-	assert.Equal(t, "invalid param", retrieved.Message)
 	var target *qerrors.Error
 	assert.True(t, errors.As(retrieved, &target))
+	assert.Equal(t, "bad_request", target.Code)
+	assert.Equal(t, "invalid param", target.Message)
 }
 
 func TestSetError_WithStandardError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
+	r.Use(middleware.ResponseMiddleware())
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		ctx.SetError(assert.AnError)
@@ -68,17 +71,15 @@ func TestSetError_WithStandardError(t *testing.T) {
 func TestGetError_NoError(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	var result any
 	r.GET("/test", func(c *gin.Context) {
 		ctx := &Context{Context: c}
-		result = ctx.GetError()
+		result := ctx.GetError()
+		assert.Nil(t, result)
 	})
 
 	w := httptest.NewRecorder()
 	req, _ := http.NewRequest("GET", "/test", nil)
 	r.ServeHTTP(w, req)
-
-	assert.Nil(t, result)
 }
 
 func TestShouldBindQuery(t *testing.T) {
@@ -153,7 +154,6 @@ func TestShouldBindUriConflictCheck_NoConflict(t *testing.T) {
 	r.POST("/test/:id", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		var req testRequest
-		// Simulate: body didn't set id (zero value), URI should bind it
 		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -183,7 +183,7 @@ func TestShouldBindUriConflictCheck_ValueMatch(t *testing.T) {
 	r.POST("/test/:id", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		var req testRequest
-		req.ID = "123" // set by JSON body, matches URI
+		req.ID = "123"
 		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -213,7 +213,7 @@ func TestShouldBindUriConflictCheck_ValueMismatch(t *testing.T) {
 	r.POST("/test/:id", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		var req testRequest
-		req.ID = "999" // set by JSON body, conflicts with URI "123"
+		req.ID = "999"
 		if err := ctx.ShouldBindUriConflictCheck(&req, []string{"id"}); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -236,7 +236,6 @@ func TestShouldBindUriConflictCheck_NonStructPointer(t *testing.T) {
 	r.POST("/test/:id", func(c *gin.Context) {
 		ctx := &Context{Context: c}
 		var s string
-		// Non-struct pointer — should return nil, no-op
 		err := ctx.ShouldBindUriConflictCheck(&s, []string{"id"})
 		assert.NoError(t, err)
 		c.Status(http.StatusOK)

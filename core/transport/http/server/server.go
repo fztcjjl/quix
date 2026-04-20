@@ -34,6 +34,7 @@ type options struct {
 	telemetryTracesEnabled bool
 	corsEnabled            bool
 	corsConfig             *cors.Config
+	loggingSkipPaths       []string
 }
 
 // WithAddr sets the server listen address.
@@ -43,7 +44,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (RequestID, CORS, Recovery, Logging, Response) is mounted.
+// WithDefaultMiddleware controls whether default middleware (RequestID, Recovery, CORS, Logging, Response) is mounted. Order: RequestID → [otelgin] → Recovery → CORS → Logging → Response.
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(o *options) {
 		o.defaultMiddleware = enabled
@@ -108,6 +109,14 @@ func WithCORS(enabled bool) Option {
 	}
 }
 
+// WithLoggingSkipPaths sets paths to skip logging.
+// Paths ending with "/" use prefix matching.
+func WithLoggingSkipPaths(paths ...string) Option {
+	return func(o *options) {
+		o.loggingSkipPaths = paths
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
 	o := &options{
@@ -139,6 +148,7 @@ func NewServer(opts ...Option) *Server {
 		if o.telemetryServiceName != "" && o.telemetryTracesEnabled {
 			engine.Use(otelgin.Middleware(o.telemetryServiceName))
 		}
+		engine.Use(middleware.Recovery())
 		if o.corsEnabled {
 			if o.corsConfig != nil {
 				engine.Use(middleware.WithCORSConfig(*o.corsConfig))
@@ -146,7 +156,10 @@ func NewServer(opts ...Option) *Server {
 				engine.Use(middleware.CORS())
 			}
 		}
-		engine.Use(middleware.Recovery(), middleware.Logging(), middleware.ResponseMiddleware())
+		engine.Use(
+			middleware.Logging(middleware.WithSkipPaths(o.loggingSkipPaths...)),
+			middleware.ResponseMiddleware(),
+		)
 	}
 
 	return s

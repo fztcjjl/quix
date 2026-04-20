@@ -103,9 +103,9 @@ func New(opts ...Option) *App {
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
 		options: options{
-			config:        defaultCfg,
-			env:           env,
-			corsEnabled:   true,
+			config:          defaultCfg,
+			env:             env,
+			corsEnabled:     true,
 			shutdownTimeout: defaultShutdownTimeout,
 		},
 	}
@@ -129,7 +129,7 @@ func New(opts ...Option) *App {
 	}
 	// Production mode: hide internal error details from HTTP responses and logs
 	if app.env == EnvProd || app.env == EnvStaging {
-		qhttp.HideInternalErrors = true
+		middleware.HideInternalErrors = true
 		middleware.HideStackTraces = true
 	}
 	// Config-driven server creation:
@@ -151,6 +151,9 @@ func New(opts ...Option) *App {
 		serverOpts = append(serverOpts, qhttp.WithCORS(app.corsEnabled))
 		if app.corsConfig != nil {
 			serverOpts = append(serverOpts, qhttp.WithCORSConfig(*app.corsConfig))
+		}
+		if len(app.loggingSkipPaths) > 0 {
+			serverOpts = append(serverOpts, qhttp.WithLoggingSkipPaths(app.loggingSkipPaths...))
 		}
 		app.httpServer = qhttp.NewServer(serverOpts...)
 	}

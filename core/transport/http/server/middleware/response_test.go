@@ -141,3 +141,33 @@ func TestResponseMiddlewareErrorWithDetails(t *testing.T) {
 		t.Errorf("details.field = %v, want %q", details["field"], "email")
 	}
 }
+
+func TestResponseMiddlewareHideInternalErrors(t *testing.T) {
+	// Verify that HideInternalErrors replaces raw error messages with a generic status text.
+	middleware.HideInternalErrors = true
+	defer func() { middleware.HideInternalErrors = false }()
+
+	r := gin.New()
+	r.Use(middleware.ResponseMiddleware())
+	r.GET("/test", server.Handler(func(c *gin.Context) error {
+		return fmt.Errorf("database connection failed")
+	}))
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/test", nil)
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+
+	var body map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	errObj := body["error"].(map[string]any)
+	if errObj["message"] != http.StatusText(http.StatusInternalServerError) {
+		t.Errorf("error.message = %v, want %q (raw message should be hidden)", errObj["message"], http.StatusText(http.StatusInternalServerError))
+	}
+}

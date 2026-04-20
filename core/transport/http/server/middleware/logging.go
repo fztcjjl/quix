@@ -60,14 +60,7 @@ func isSkipped(path string, skipPaths []string) bool {
 }
 
 // Logging returns a middleware that logs each HTTP request with structured fields.
-// SkipPaths specifies exact paths to skip logging (e.g., "/healthz").
-func Logging(skipPaths ...string) gin.HandlerFunc {
-	return LoggingWith(WithSkipPaths(skipPaths...))
-}
-
-// LoggingWith returns a middleware that logs each HTTP request with structured fields.
-// It supports functional options for customizing behavior.
-func LoggingWith(opts ...LoggingOption) gin.HandlerFunc {
+func Logging(opts ...LoggingOption) gin.HandlerFunc {
 	var cfg loggingConfig
 	for _, opt := range opts {
 		opt(&cfg)

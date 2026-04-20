@@ -27,9 +27,9 @@ Recovery → [otelgin] → RequestID → Logging → ResponseMiddleware
 
 ### 2. CORS 在默认中间件链中的位置
 
-**选择**: `RequestID → [otelgin] → CORS → Recovery → Logging → ResponseMiddleware`
+**选择**: `RequestID → [otelgin] → Recovery → CORS → Logging → ResponseMiddleware`
 
-**理由**: RequestID 最前设置以确保所有中间件都能使用请求标识；otelgin 紧随其后尽早创建 span 捕获完整请求时长；CORS 在 Recovery 之前处理 OPTIONS 预检请求（short-circuit），避免对预检请求执行不必要的 Recovery/Logging/Response 处理；Recovery 保护后续业务逻辑。
+**理由**: RequestID 最前设置以确保所有中间件都能使用请求标识；otelgin 紧随其后尽早创建 span 捕获完整请求时长；Recovery 在 CORS 之前确保即使 CORS 处理异常也能被捕获；CORS 处理 OPTIONS 预检请求（short-circuit）；Logging 记录实际请求；Response 格式化错误响应。
 
 ### 3. 默认 CORS 配置
 
