@@ -26,3 +26,7 @@ func (c *Context) GetError() error {
 	}
 	return nil
 }
+
+func SetAppError(c *gin.Context, err error) {
+	c.Set("app_error", err)
+}

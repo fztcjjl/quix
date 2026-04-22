@@ -3,6 +3,7 @@ package log
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -132,5 +133,52 @@ func TestZerologClose(t *testing.T) {
 	zl := NewZerolog(l)
 	if err := zl.Close(); err != nil {
 		t.Fatalf("Close() returned error: %v", err)
+	}
+}
+
+func TestZerologTimestampField(t *testing.T) {
+	var buf bytes.Buffer
+	l := zerolog.New(&buf).With().Timestamp().Logger()
+	zl := NewZerolog(l)
+
+	zl.Info(context.Background(), "ts test")
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON output: %v", err)
+	}
+	if _, ok := m["time"]; !ok {
+		t.Errorf("expected 'time' field in output, got: %s", buf.String())
+	}
+}
+
+func TestZerologCallerField(t *testing.T) {
+	var buf bytes.Buffer
+	l := zerolog.New(&buf).With().Timestamp().CallerWithSkipFrameCount(4).Logger()
+	zl := NewZerolog(l)
+
+	orig := Default()
+	defer SetDefault(orig)
+	SetDefault(zl)
+
+	// Call through package-level Info() to match real usage pattern.
+	Info(context.Background(), "caller test")
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON output: %v", err)
+	}
+	caller, ok := m["caller"]
+	if !ok {
+		t.Errorf("expected 'caller' field in output, got: %s", buf.String())
+		return
+	}
+	callerStr, ok := caller.(string)
+	if !ok {
+		t.Fatalf("expected caller to be string, got %T", caller)
+	}
+	// Caller should contain the test file name
+	if !strings.Contains(callerStr, "zerolog_test.go") {
+		t.Errorf("expected caller to contain 'zerolog_test.go', got: %s", callerStr)
 	}
 }

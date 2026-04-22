@@ -12,6 +12,7 @@ type captureLogger struct {
 	errors []logCall
 	warns  []logCall
 	debugs []logCall
+	traces []logCall
 	mu     sync.Mutex
 }
 
@@ -20,6 +21,11 @@ type logCall struct {
 	args []any
 }
 
+func (l *captureLogger) Trace(_ context.Context, msg string, args ...any) {
+	l.mu.Lock()
+	l.traces = append(l.traces, logCall{msg, args})
+	l.mu.Unlock()
+}
 func (l *captureLogger) Info(_ context.Context, msg string, args ...any) {
 	l.mu.Lock()
 	l.infos = append(l.infos, logCall{msg, args})
@@ -182,4 +188,115 @@ func TestConcurrentSetDefaultAndLog(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestLevelOrdering(t *testing.T) {
+	if LevelTrace >= LevelDebug {
+		t.Error("LevelTrace should be less than LevelDebug")
+	}
+	if LevelDebug >= LevelInfo {
+		t.Error("LevelDebug should be less than LevelInfo")
+	}
+	if LevelInfo >= LevelWarn {
+		t.Error("LevelInfo should be less than LevelWarn")
+	}
+	if LevelWarn >= LevelError {
+		t.Error("LevelWarn should be less than LevelError")
+	}
+}
+
+func TestLevelString(t *testing.T) {
+	tests := []struct {
+		level Level
+		want  string
+	}{
+		{LevelTrace, "trace"},
+		{LevelDebug, "debug"},
+		{LevelInfo, "info"},
+		{LevelWarn, "warn"},
+		{LevelError, "error"},
+		{Level(99), "unknown"},
+	}
+	for _, tt := range tests {
+		if got := tt.level.String(); got != tt.want {
+			t.Errorf("Level(%d).String() = %q, want %q", tt.level, got, tt.want)
+		}
+	}
+}
+
+func TestParseLevel(t *testing.T) {
+	tests := []struct {
+		input string
+		want  Level
+		ok    bool
+	}{
+		{"trace", LevelTrace, true},
+		{"debug", LevelDebug, true},
+		{"info", LevelInfo, true},
+		{"warn", LevelWarn, true},
+		{"error", LevelError, true},
+		{"INFO", LevelInfo, true},
+		{"DEBUG", LevelDebug, true},
+		{"invalid", Level(0), false},
+	}
+	for _, tt := range tests {
+		got, err := ParseLevel(tt.input)
+		if tt.ok && err != nil {
+			t.Errorf("ParseLevel(%q) unexpected error: %v", tt.input, err)
+		}
+		if !tt.ok && err == nil {
+			t.Errorf("ParseLevel(%q) expected error, got nil", tt.input)
+		}
+		if err == nil && got != tt.want {
+			t.Errorf("ParseLevel(%q) = %d, want %d", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestPackageLevelTrace(t *testing.T) {
+	orig := Default()
+	defer SetDefault(orig)
+
+	m := &captureLogger{}
+	SetDefault(m)
+	ctx := context.Background()
+
+	Trace(ctx, "trace msg")
+
+	if len(m.traces) != 1 || m.traces[0].msg != "trace msg" {
+		t.Errorf("expected 1 trace log, got %v", m.traces)
+	}
+}
+
+func TestNewContextAndFromContext(t *testing.T) {
+	orig := Default()
+	defer SetDefault(orig)
+
+	custom := &captureLogger{}
+	ctx := NewContext(context.Background(), custom)
+
+	got := FromContext(ctx)
+	if got != custom {
+		t.Error("FromContext should return the stored logger")
+	}
+}
+
+func TestNewContextOverwrites(t *testing.T) {
+	l1 := &captureLogger{}
+	l2 := &captureLogger{}
+
+	ctx := NewContext(context.Background(), l1)
+	ctx = NewContext(ctx, l2)
+
+	if FromContext(ctx) != l2 {
+		t.Error("second NewContext should overwrite the first")
+	}
+}
+
+func TestFromContextReturnsDefaultWhenEmpty(t *testing.T) {
+	ctx := context.Background()
+	got := FromContext(ctx)
+	if got != Default() {
+		t.Error("FromContext should return Default() when no logger in context")
+	}
 }

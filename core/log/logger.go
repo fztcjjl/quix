@@ -3,22 +3,89 @@ package log
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync/atomic"
 )
+
+// AtomicLevel provides concurrent-safe log level management.
+// Multiple Logger instances can share the same AtomicLevel to synchronize level changes.
+type AtomicLevel struct {
+	level atomic.Int32
+}
+
+// NewAtomicLevel creates an AtomicLevel with the given initial level.
+func NewAtomicLevel(l Level) *AtomicLevel {
+	al := &AtomicLevel{}
+	//nolint:gosec // Level values are small bounded integers (-1 to 3)
+	al.level.Store(int32(l))
+	return al
+}
+
+// Level returns the current log level.
+func (al *AtomicLevel) Level() Level {
+	return Level(al.level.Load())
+}
+
+// SetLevel atomically sets the log level.
+func (al *AtomicLevel) SetLevel(l Level) {
+	//nolint:gosec // Level values are small bounded integers (-1 to 3)
+	al.level.Store(int32(l))
+}
+
+func (al *AtomicLevel) Enabled(l Level) bool {
+	return Level(al.level.Load()) <= l
+}
 
 // Level represents the log level.
 type Level int
 
 const (
+	LevelTrace Level = -1
 	LevelDebug Level = iota
 	LevelInfo
 	LevelWarn
 	LevelError
 )
 
+func (l Level) String() string {
+	switch l {
+	case LevelTrace:
+		return "trace"
+	case LevelDebug:
+		return "debug"
+	case LevelInfo:
+		return "info"
+	case LevelWarn:
+		return "warn"
+	case LevelError:
+		return "error"
+	default:
+		return "unknown"
+	}
+}
+
+// ParseLevel parses a case-insensitive level string.
+func ParseLevel(s string) (Level, error) {
+	switch strings.ToLower(s) {
+	case "trace":
+		return LevelTrace, nil
+	case "debug":
+		return LevelDebug, nil
+	case "info":
+		return LevelInfo, nil
+	case "warn":
+		return LevelWarn, nil
+	case "error":
+		return LevelError, nil
+	default:
+		return Level(0), fmt.Errorf("unknown log level: %q", s)
+	}
+}
+
 // Logger is the unified logging interface for quix framework.
 // All framework components use this interface for log output.
 type Logger interface {
+	Trace(ctx context.Context, msg string, args ...any)
 	Info(ctx context.Context, msg string, args ...any)
 	Error(ctx context.Context, msg string, args ...any)
 	Warn(ctx context.Context, msg string, args ...any)
@@ -75,6 +142,11 @@ func Fatal(ctx context.Context, msg string, args ...any) {
 	Default().Fatal(ctx, msg, args...)
 }
 
+// Trace logs a trace message using the global default Logger.
+func Trace(ctx context.Context, msg string, args ...any) {
+	Default().Trace(ctx, msg, args...)
+}
+
 // With creates a child Logger from the global default Logger with additional fields.
 func With(args ...any) Logger {
 	return Default().With(args...)
@@ -88,6 +160,23 @@ func SetLevel(level Level) {
 // Close closes the global default Logger, flushing any buffered output.
 func Close() error {
 	return Default().Close()
+}
+
+// contextKey is the unexported type used for context keys to avoid collisions.
+type contextKey struct{}
+
+// NewContext stores a Logger in the context.
+func NewContext(ctx context.Context, l Logger) context.Context {
+	return context.WithValue(ctx, contextKey{}, l)
+}
+
+// FromContext extracts a Logger from the context.
+// Returns the global default Logger if no Logger is stored.
+func FromContext(ctx context.Context) Logger {
+	if l, ok := ctx.Value(contextKey{}).(Logger); ok {
+		return l
+	}
+	return Default()
 }
 
 // normalizeArgs standardizes key-value pairs for all adapters.

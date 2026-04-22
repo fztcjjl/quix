@@ -8,38 +8,45 @@ import (
 )
 
 type zapLogger struct {
-	sl    *zap.SugaredLogger
-	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
+	al *AtomicLevel
+	sl *zap.SugaredLogger
 }
 
 // NewZap creates a Logger backed by zap.SugaredLogger.
 func NewZap(sl *zap.SugaredLogger) Logger {
-	return &zapLogger{sl: sl}
+	return &zapLogger{al: NewAtomicLevel(LevelDebug), sl: sl}
 }
 
 func (z *zapLogger) Info(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelInfo {
+	if !z.al.Enabled(LevelInfo) {
 		return
 	}
 	z.sl.Infow(msg, normalizeArgs(args)...)
 }
 
 func (z *zapLogger) Error(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelError {
+	if !z.al.Enabled(LevelError) {
 		return
 	}
 	z.sl.Errorw(msg, normalizeArgs(args)...)
 }
 
 func (z *zapLogger) Warn(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelWarn {
+	if !z.al.Enabled(LevelWarn) {
 		return
 	}
 	z.sl.Warnw(msg, normalizeArgs(args)...)
 }
 
 func (z *zapLogger) Debug(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelDebug {
+	if !z.al.Enabled(LevelDebug) {
+		return
+	}
+	z.sl.Debugw(msg, normalizeArgs(args)...)
+}
+
+func (z *zapLogger) Trace(ctx context.Context, msg string, args ...any) {
+	if !z.al.Enabled(LevelTrace) {
 		return
 	}
 	z.sl.Debugw(msg, normalizeArgs(args)...)
@@ -51,11 +58,11 @@ func (z *zapLogger) Fatal(ctx context.Context, msg string, args ...any) {
 }
 
 func (z *zapLogger) With(args ...any) Logger {
-	return &zapLogger{sl: z.sl.With(normalizeArgs(args)...), level: z.level}
+	return &zapLogger{al: z.al, sl: z.sl.With(normalizeArgs(args)...)}
 }
 
 func (z *zapLogger) SetLevel(level Level) {
-	z.level = level
+	z.al.SetLevel(level)
 }
 
 func (z *zapLogger) Close() error {

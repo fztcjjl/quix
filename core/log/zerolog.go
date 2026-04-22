@@ -3,73 +3,115 @@ package log
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 )
 
 type zerologLogger struct {
-	l     zerolog.Logger
-	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
+	al *AtomicLevel
+	l  zerolog.Logger
 }
 
 // NewZerolog creates a Logger backed by zerolog.
 func NewZerolog(l zerolog.Logger) Logger {
-	return &zerologLogger{l: l}
+	return &zerologLogger{al: NewAtomicLevel(LevelDebug), l: l}
+}
+
+func (z *zerologLogger) Trace(ctx context.Context, msg string, args ...any) {
+	if !z.al.Enabled(LevelTrace) {
+		return
+	}
+	e := z.l.Trace().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 }
 
 func (z *zerologLogger) Info(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelInfo {
+	if !z.al.Enabled(LevelInfo) {
 		return
 	}
-	z.l.Info().Ctx(ctx).Fields(argsToMap(normalizeArgs(args))).Msg(msg)
+	e := z.l.Info().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 }
 
 func (z *zerologLogger) Error(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelError {
+	if !z.al.Enabled(LevelError) {
 		return
 	}
-	z.l.Error().Ctx(ctx).Fields(argsToMap(normalizeArgs(args))).Msg(msg)
+	e := z.l.Error().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 }
 
 func (z *zerologLogger) Warn(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelWarn {
+	if !z.al.Enabled(LevelWarn) {
 		return
 	}
-	z.l.Warn().Ctx(ctx).Fields(argsToMap(normalizeArgs(args))).Msg(msg)
+	e := z.l.Warn().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 }
 
 func (z *zerologLogger) Debug(ctx context.Context, msg string, args ...any) {
-	if z.level > LevelDebug {
+	if !z.al.Enabled(LevelDebug) {
 		return
 	}
-	z.l.Debug().Ctx(ctx).Fields(argsToMap(normalizeArgs(args))).Msg(msg)
+	e := z.l.Debug().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 }
 
 func (z *zerologLogger) Fatal(ctx context.Context, msg string, args ...any) {
-	z.l.Error().Ctx(ctx).Fields(argsToMap(normalizeArgs(args))).Msg(msg)
+	e := z.l.Error().Ctx(ctx)
+	addFieldsToEvent(e, normalizeArgs(args))
+	e.Msg(msg)
 	os.Exit(1)
 }
 
 func (z *zerologLogger) With(args ...any) Logger {
-	return &zerologLogger{l: z.l.With().Fields(argsToMap(normalizeArgs(args))).Logger(), level: z.level}
+	normalized := normalizeArgs(args)
+	m := make(map[string]any, len(normalized)/2)
+	for i := 0; i+1 < len(normalized); i += 2 {
+		m[normalized[i].(string)] = normalized[i+1]
+	}
+	return &zerologLogger{al: z.al, l: z.l.With().Fields(m).Logger()}
 }
 
 func (z *zerologLogger) SetLevel(level Level) {
-	z.level = level
+	z.al.SetLevel(level)
 }
 
 func (z *zerologLogger) Close() error {
 	return nil
 }
 
-// argsToMap converts a flat key-value slice to a map.
-// Precondition: args must be even length with string keys (from normalizeArgs).
-func argsToMap(args []any) map[string]any {
-	m := make(map[string]any, len(args)/2)
+// addFieldsToEvent adds key-value pairs to a zerolog.Event using type dispatch.
+// This avoids allocating a map per log call.
+func addFieldsToEvent(e *zerolog.Event, args []any) *zerolog.Event {
 	for i := 0; i+1 < len(args); i += 2 {
-		m[args[i].(string)] = args[i+1]
+		key := args[i].(string)
+		switch v := args[i+1].(type) {
+		case string:
+			e.Str(key, v)
+		case error:
+			e.AnErr(key, v)
+		case int:
+			e.Int(key, v)
+		case int64:
+			e.Int64(key, v)
+		case float64:
+			e.Float64(key, v)
+		case bool:
+			e.Bool(key, v)
+		case time.Duration:
+			e.Dur(key, v)
+		default:
+			e.Interface(key, v)
+		}
 	}
-	return m
+	return e
 }
 
 var _ Logger = (*zerologLogger)(nil)

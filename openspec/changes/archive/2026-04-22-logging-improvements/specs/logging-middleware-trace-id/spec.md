@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Logging middleware outputs trace_id in log fields
 Logging middleware SHALL 从 `request.Context()` 中提取 OTel trace_id，并作为 `trace_id` 字段写入日志。当 OTel 未启用（context 中无 trace）时，trace_id 字段 SHALL 不输出。同时 SHALL 提取 OTel span_id 并作为 `span_id` 字段写入日志，与 trace_id 行为一致。
 
@@ -15,6 +17,8 @@ Logging middleware SHALL 通过函数变量 `extractTraceID` 和 `extractSpanID`
 #### Scenario: No OTel import in middleware package
 - **WHEN** 检查 `core/transport/http/server/middleware/` 包的 import 列表
 - **THEN** 不包含任何 `go.opentelemetry.io/otel` 依赖
+
+## ADDED Requirements
 
 ### Requirement: ExtractSpanID function variable
 middleware 包 SHALL 导出 `ExtractSpanID func(ctx context.Context) string` 变量，与 `ExtractTraceID` 对称。telemetry 初始化时 MUST 设置此变量。

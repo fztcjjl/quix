@@ -218,3 +218,13 @@ func ExtractTraceID(ctx context.Context) string {
 	}
 	return sc.TraceID().String()
 }
+
+// ExtractSpanID extracts OTel span_id from context.
+// Returns empty string if no trace context is present.
+func ExtractSpanID(ctx context.Context) string {
+	sc := trace.SpanContextFromContext(ctx)
+	if !sc.IsValid() {
+		return ""
+	}
+	return sc.SpanID().String()
+}

@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: Logging returns a middleware that logs each HTTP request with structured fields
 Logging SHALL 返回一个 middleware，使用结构化字段记录每个 HTTP 请求。日志 fields MUST 包含：method、path、status、latency（字符串）、latency_ms（float64 毫秒数）、client_ip、response_size。当 OTel 启用时，额外包含 trace_id 和 span_id 字段。当 query string 非空时，额外包含 query 字段。当 user_agent 非空时，额外包含 user_agent 字段。当 gin route 可获取（`c.FullPath()` 非 nil）时，额外包含 route 字段（归一化路径如 `/users/:id`）。当 gin context 中存在 `app_error` 且为 `*qerrors.Error` 类型时，额外包含 error_code 字段。
 
@@ -51,48 +53,6 @@ Logging 中间件 SHALL 通过选项模式支持自定义行为。`Logging(opts 
 - `WithHook(fn LoggingHookFunc)` — 设置自定义 hook 函数
 - `WithSlowThreshold(d time.Duration)` — 设置慢请求阈值
 
-#### Scenario: WithSkipPaths option
-- **WHEN** 使用 `Logging(WithSkipPaths("/healthz", "/metrics/"))` 配置中间件
-- **THEN** MUST 跳过 `/healthz`（精确）和 `/metrics/*`（前缀）的日志记录
-
-#### Scenario: WithHook receives log fields
-- **WHEN** 使用 `Logging(WithHook(fn))` 配置中间件，请求完成后
-- **THEN** `fn` MUST 被调用，接收的参数 MUST 包含 method、path、status、latency、clientIP、responseSize 等标准字段
-
-#### Scenario: Hook can add custom fields
-- **WHEN** Hook 函数向传入的字段 map 追加 `"custom_key", "custom_val"`
-- **THEN** 日志输出 MUST 包含 `custom_key=custom_val` 字段
-
-#### Scenario: No options defaults to all requests logged
-- **WHEN** 使用 `Logging()` 不传入任何选项
-- **THEN** MUST 对所有请求输出日志
-
 #### Scenario: WithSlowThreshold option
 - **WHEN** 使用 `Logging(WithSlowThreshold(2 * time.Second))` 配置中间件
 - **THEN** 超过 2 秒的请求 MUST 输出 slow request 警告日志
-
-### Requirement: Prefix matching for skipPaths
-Logging 中间件 SHALL 支持前缀匹配。当 skipPaths 中的路径以 `/` 结尾时（如 `/metrics/`），MUST 匹配所有以该前缀开头的请求路径。不以 `/` 结尾的路径保持精确匹配。
-
-#### Scenario: Exact match (no trailing slash)
-- **WHEN** skipPaths 为 `["/healthz"]`，请求路径为 `/healthz`
-- **THEN** MUST 跳过日志记录
-
-#### Scenario: Exact match rejects sub-paths (no trailing slash)
-- **WHEN** skipPaths 为 `["/healthz"]`，请求路径为 `/healthz/ready`
-- **THEN** MUST NOT 跳过日志记录
-
-#### Scenario: Prefix match (trailing slash)
-- **WHEN** skipPaths 为 `["/metrics/"]`，请求路径为 `/metrics/health`
-- **THEN** MUST 跳过日志记录
-
-#### Scenario: Prefix match rejects parent path (trailing slash)
-- **WHEN** skipPaths 为 `["/metrics/"]`，请求路径为 `/metrics`
-- **THEN** MUST NOT 跳过日志记录
-
-### Requirement: LoggingHookFunc type
-中间件 SHALL 导出 `LoggingHookFunc` 类型，签名为 `func(c *gin.Context, fields map[string]any)`，在请求完成后、日志写入前被调用。
-
-#### Scenario: Hook function signature
-- **WHEN** 开发者查看 `LoggingHookFunc` 类型定义
-- **THEN** 签名 MUST 为 `type LoggingHookFunc func(c *gin.Context, fields map[string]any)`

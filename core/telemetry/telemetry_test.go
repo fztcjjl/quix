@@ -184,6 +184,12 @@ func TestExtractTraceID(t *testing.T) {
 	assert.Empty(t, traceID)
 }
 
+func TestExtractSpanID(t *testing.T) {
+	// Without trace context, should return empty
+	spanID := ExtractSpanID(context.Background())
+	assert.Empty(t, spanID)
+}
+
 func TestNewResourceMerge(t *testing.T) {
 	custom := resource.NewWithAttributes(
 		semconv.SchemaURL,

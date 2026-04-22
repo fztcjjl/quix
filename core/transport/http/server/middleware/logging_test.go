@@ -4,13 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	qerrors "github.com/fztcjjl/quix/core/errors"
 	"github.com/fztcjjl/quix/core/log"
 	"github.com/gin-gonic/gin"
 )
@@ -27,6 +30,9 @@ type captureRecord struct {
 	args  []any
 }
 
+func (l *captureLogger) Trace(_ context.Context, msg string, args ...any) {
+	l.add(slog.Level(-8), msg, args)
+}
 func (l *captureLogger) Info(_ context.Context, msg string, args ...any) {
 	l.add(slog.LevelInfo, msg, args)
 }
@@ -94,7 +100,7 @@ func TestLoggingFields(t *testing.T) {
 	cap := &captureLogger{}
 	log.SetDefault(cap)
 
-	r := setupRouter(Logging())
+	r := setupRouter(AccessLog())
 
 	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
 	w := httptest.NewRecorder()
@@ -135,7 +141,7 @@ func TestLoggingLevelByStatusCode(t *testing.T) {
 			cap := &captureLogger{}
 			log.SetDefault(cap)
 
-			r := setupRouter(Logging())
+			r := setupRouter(AccessLog())
 
 			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
 			w := httptest.NewRecorder()
@@ -153,7 +159,7 @@ func TestLoggingSkipPaths(t *testing.T) {
 	cap := &captureLogger{}
 	log.SetDefault(cap)
 
-	r := setupRouter(Logging(WithSkipPaths("/healthz")))
+	r := setupRouter(AccessLog(WithSkipPaths("/healthz")))
 
 	// Request to skipped path
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -192,7 +198,7 @@ func TestLoggingRequestID(t *testing.T) {
 	r.Use(func(c *gin.Context) {
 		c.Set("X-Request-Id", "test-123")
 		c.Next()
-	}, Logging())
+	}, AccessLog())
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
@@ -213,7 +219,7 @@ func TestLoggingJSONOutput(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(Logging())
+	r.Use(AccessLog())
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
 	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
@@ -237,6 +243,9 @@ type slogLoggerAdapter struct {
 	handler slog.Handler
 }
 
+func (l *slogLoggerAdapter) Trace(ctx context.Context, msg string, args ...any) {
+	l.log(ctx, slog.Level(-8), msg, args...)
+}
 func (l *slogLoggerAdapter) Info(ctx context.Context, msg string, args ...any) {
 	l.log(ctx, slog.LevelInfo, msg, args...)
 }
@@ -298,7 +307,7 @@ func TestLoggingWithSkipPathsPrefixMatch(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(Logging(WithSkipPaths("/metrics/")))
+	r.Use(AccessLog(WithSkipPaths("/metrics/")))
 	r.GET("/metrics/health", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	r.GET("/metrics", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
@@ -352,7 +361,7 @@ func TestLoggingWithHook(t *testing.T) {
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(Logging(WithHook(func(c *gin.Context, fields map[string]any) {
+	r.Use(AccessLog(WithHook(func(c *gin.Context, fields map[string]any) {
 		hookCalled = true
 		hookFields = fields
 		fields["custom_key"] = "custom_val"
@@ -377,5 +386,677 @@ func TestLoggingWithHook(t *testing.T) {
 	fields := cap.toMap()
 	if fields["custom_key"] != "custom_val" {
 		t.Errorf("expected custom_key=custom_val in log output, got %v", fields)
+	}
+}
+
+func TestLoggingLatencyMsField(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	latencyMs, ok := result["latency_ms"].(float64)
+	if !ok {
+		t.Fatal("latency_ms field missing or not a float64")
+	}
+	if latencyMs <= 0 {
+		t.Errorf("latency_ms = %v, want > 0", latencyMs)
+	}
+}
+
+func TestLoggingQueryField(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok?page=2&size=10", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if fields["query"] != "page=2&size=10" {
+		t.Errorf("query = %v, want page=2&size=10", fields["query"])
+	}
+}
+
+func TestLoggingNoQueryField(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if _, ok := fields["query"]; ok {
+		t.Error("query field should not be present when URL has no query string")
+	}
+}
+
+func TestLoggingRouteField(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/users/:id", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/users/42", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if fields["path"] != "/users/42" {
+		t.Errorf("path = %v, want /users/42", fields["path"])
+	}
+	if fields["route"] != "/users/:id" {
+		t.Errorf("route = %v, want /users/:id", fields["route"])
+	}
+}
+
+func TestLoggingNoRouteFor404(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/nonexistent", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if _, ok := fields["route"]; ok {
+		t.Error("route field should not be present for unmatched paths")
+	}
+}
+
+func TestLoggingErrorCodeField(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/error", func(c *gin.Context) {
+		c.Set("app_error", &qerrors.Error{Code: "not_found", Message: "user not found", StatusCode: 404})
+		c.String(http.StatusNotFound, "not found")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/error", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if fields["error_code"] != "not_found" {
+		t.Errorf("error_code = %v, want not_found", fields["error_code"])
+	}
+}
+
+func TestLoggingNoErrorCodeForPlainError(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/error", func(c *gin.Context) {
+		c.Set("app_error", errors.New("something went wrong"))
+		c.String(http.StatusInternalServerError, "error")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/error", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if _, ok := fields["error_code"]; ok {
+		t.Error("error_code field should not be present for plain errors")
+	}
+}
+
+func TestLoggingSlowRequest(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithSlowThreshold(10 * time.Millisecond)))
+	r.GET("/slow", func(c *gin.Context) {
+		time.Sleep(50 * time.Millisecond)
+		c.String(http.StatusOK, "slow")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	hasSlowRequest := false
+	for _, rec := range cap.records {
+		if rec.msg == "slow request" {
+			hasSlowRequest = true
+		}
+	}
+	cap.mu.Unlock()
+
+	if !hasSlowRequest {
+		t.Error("expected slow request log entry")
+	}
+}
+
+func TestLoggingNoSlowRequestWhenFast(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithSlowThreshold(1 * time.Second)))
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	hasSlowRequest := false
+	for _, rec := range cap.records {
+		if rec.msg == "slow request" {
+			hasSlowRequest = true
+		}
+	}
+	cap.mu.Unlock()
+
+	if hasSlowRequest {
+		t.Error("should not have slow request log for fast requests")
+	}
+}
+
+func TestLoggingNoSlowRequestWithoutThreshold(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog()) // no slow threshold configured
+	r.GET("/slow", func(c *gin.Context) {
+		time.Sleep(50 * time.Millisecond)
+		c.String(http.StatusOK, "slow")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	hasSlowRequest := false
+	for _, rec := range cap.records {
+		if rec.msg == "slow request" {
+			hasSlowRequest = true
+		}
+	}
+	cap.mu.Unlock()
+
+	if hasSlowRequest {
+		t.Error("should not have slow request log when threshold is not configured")
+	}
+}
+
+func TestWithRequestLoggerInjectsContextLogger(t *testing.T) {
+	orig := log.Default()
+	defer log.SetDefault(orig)
+
+	// Use slog adapter to verify fields are preserved through With().
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	l := log.NewSlog(slog.New(handler))
+	log.SetDefault(l)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("X-Request-Id", "req-abc")
+		c.Next()
+	}, WithRequestLogger())
+	r.GET("/ok", func(c *gin.Context) {
+		ctxLogger := log.FromContext(c.Request.Context())
+		// Verify the context logger is different from default (has With fields)
+		ctxLogger.Info(c.Request.Context(), "handler log", "key", "val")
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v\nraw: %s", err, buf.String())
+	}
+
+	if result["request_id"] != "req-abc" {
+		t.Errorf("request_id = %v, want req-abc", result["request_id"])
+	}
+}
+
+func TestWithRequestLoggerWithoutRequestID(t *testing.T) {
+	cap := &captureLogger{}
+	orig := log.Default()
+	log.SetDefault(cap)
+	defer log.SetDefault(orig)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	// No requestid middleware
+	r.Use(WithRequestLogger())
+	r.GET("/ok", func(c *gin.Context) {
+		l := log.FromContext(c.Request.Context())
+		l.Info(c.Request.Context(), "handler log")
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	cap.mu.Lock()
+	defer cap.mu.Unlock()
+	if len(cap.records) == 0 {
+		t.Fatal("expected log from handler, got none")
+	}
+
+	// Should not contain request_id
+	rec := cap.records[0]
+	for i := 0; i+1 < len(rec.args); i += 2 {
+		if rec.args[i].(string) == "request_id" {
+			t.Error("should not contain request_id when no requestid middleware")
+		}
+	}
+}
+
+func TestWithRequestLoggerFallsBackToDefault(t *testing.T) {
+	orig := log.Default()
+	defer log.SetDefault(orig)
+
+	custom := &captureLogger{}
+	log.SetDefault(custom)
+
+	// WithRequestLogger should use FromContext which returns Default() when no logger in context
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(WithRequestLogger())
+	r.GET("/ok", func(c *gin.Context) {
+		l := log.FromContext(c.Request.Context())
+		if l != custom {
+			t.Error("FromContext should return default logger when no logger in context")
+		}
+		c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+}
+
+func TestAccessLogBytesInField(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(`{"name":"test"}`))
+	req.Header.Set("Content-Length", "15")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if result["request_size"] != float64(15) {
+		t.Errorf("request_size = %v, want 15", result["request_size"])
+	}
+}
+
+func TestAccessLogContentTypeField(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/ok", nil)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if result["content_type"] != "application/json" {
+		t.Errorf("content_type = %v, want application/json", result["content_type"])
+	}
+}
+
+func TestAccessLogNoContentTypeWhenEmpty(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodGet, "/ok", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["content_type"]; ok {
+		t.Error("content_type should not be present for GET without Content-Type header")
+	}
+}
+
+func TestBodyLogJsonContentType(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := `{"user":"alice","email":"alice@example.com"}`
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if result["request_body"] != body {
+		t.Errorf("request_body = %v, want %v", result["request_body"], body)
+	}
+}
+
+func TestBodyLogTruncation(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(10)))
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	got, _ := result["request_body"].(string)
+	if got != "0123456789" {
+		t.Errorf("request_body = %q, want %q", got, "0123456789")
+	}
+	if result["body_truncated"] != true {
+		t.Error("body_truncated should be true when body exceeds maxBytes")
+	}
+}
+
+func TestBodyLogNotTruncated(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := "hello"
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["body_truncated"]; ok {
+		t.Error("body_truncated should not be present when body fits in maxBytes")
+	}
+}
+
+func TestBodyLogSkipsMultipart(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/upload", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/upload", strings.NewReader("field1=value1"))
+	req.Header.Set("Content-Type", "multipart/form-data; boundary=abc123")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["request_body"]; ok {
+		t.Error("request_body should not be present for multipart/form-data")
+	}
+}
+
+func TestBodyLogSkipsOctetStream(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/download", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/download", strings.NewReader("binary-data"))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["request_body"]; ok {
+		t.Error("request_body should not be present for application/octet-stream")
+	}
+}
+
+func TestBodyLogSkipsProtobuf(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/proto", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/proto", strings.NewReader("protobuf-data"))
+	req.Header.Set("Content-Type", "application/x-protobuf")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["request_body"]; ok {
+		t.Error("request_body should not be present for application/x-protobuf")
+	}
+}
+
+func TestBodyLogDisabledByDefault(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog()) // no WithBodyLog
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(`{"key":"val"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if _, ok := result["request_body"]; ok {
+		t.Error("request_body should not be present when WithBodyLog is not configured")
+	}
+}
+
+func TestBodyLogCapturesTextPlain(t *testing.T) {
+	var buf bytes.Buffer
+	handler := slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	log.SetDefault(&slogLoggerAdapter{handler: handler})
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog(WithBodyLog(1024)))
+	r.POST("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := "plain text body content"
+	req := httptest.NewRequest(http.MethodPost, "/ok", strings.NewReader(body))
+	req.Header.Set("Content-Type", "text/plain")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	var result map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("log output is not valid JSON: %v", err)
+	}
+
+	if result["request_body"] != body {
+		t.Errorf("request_body = %v, want %v", result["request_body"], body)
+	}
+}
+
+func TestIsLoggableContentType(t *testing.T) {
+	tests := []struct {
+		ct   string
+		want bool
+	}{
+		{"application/json", true},
+		{"application/json; charset=utf-8", true},
+		{"application/x-www-form-urlencoded", true},
+		{"application/xml", true},
+		{"text/plain", true},
+		{"text/html", true},
+		{"multipart/form-data; boundary=abc", false},
+		{"application/octet-stream", false},
+		{"application/grpc+proto", false},
+		{"application/x-protobuf", false},
+		{"", false},
+		{"application/msgpack", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.ct, func(t *testing.T) {
+			if got := isLoggableContentType(tt.ct); got != tt.want {
+				t.Errorf("isLoggableContentType(%q) = %v, want %v", tt.ct, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTruncateBody(t *testing.T) {
+	// Within limit, not truncated.
+	b, truncated := truncateBody([]byte("hello"), 10)
+	if truncated {
+		t.Error("should not be truncated")
+	}
+	if string(b) != "hello" {
+		t.Errorf("got %q, want %q", string(b), "hello")
+	}
+
+	// Exceeds limit, truncated.
+	b, truncated = truncateBody([]byte("0123456789ABCDEF"), 8)
+	if !truncated {
+		t.Error("should be truncated")
+	}
+	if string(b) != "01234567" {
+		t.Errorf("got %q, want %q", string(b), "01234567")
+	}
+
+	// Zero max means no truncation.
+	b, truncated = truncateBody([]byte("hello"), 0)
+	if truncated {
+		t.Error("should not be truncated when max is 0")
+	}
+	if string(b) != "hello" {
+		t.Errorf("got %q, want %q", string(b), "hello")
 	}
 }

@@ -1,44 +1,72 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/fztcjjl/quix/core/errors"
 	"github.com/fztcjjl/quix/core/log"
 	"github.com/gin-gonic/gin"
 )
 
-// LoggingHookFunc is called after each request with the collected log fields.
+// AccessLogHookFunc is called after each request with the collected log fields.
 // It can be used to add custom fields or perform side effects.
-type LoggingHookFunc func(c *gin.Context, fields map[string]any)
+type AccessLogHookFunc func(c *gin.Context, fields map[string]any)
 
 // ExtractTraceID extracts trace_id from context for logging middleware.
 // Set this variable to enable trace_id output in access logs.
 // When nil (default), no trace_id is included in log output.
 var ExtractTraceID func(ctx context.Context) string
 
-// loggingConfig holds configuration for the logging middleware.
-type loggingConfig struct {
-	skipPaths []string
-	hook      LoggingHookFunc
+// ExtractSpanID extracts span_id from context for logging middleware.
+// Set this variable to enable span_id output in access logs.
+// When nil (default), no span_id is included in log output.
+var ExtractSpanID func(ctx context.Context) string
+
+// accessLogConfig holds configuration for the access log middleware.
+type accessLogConfig struct {
+	skipPaths     []string
+	hook          AccessLogHookFunc
+	slowThreshold time.Duration
+	bodyLogMax    int
 }
 
-// LoggingOption configures the logging middleware.
-type LoggingOption func(*loggingConfig)
+// AccessLogOption configures the AccessLog middleware.
+type AccessLogOption func(*accessLogConfig)
 
 // WithSkipPaths sets paths to skip logging. Paths ending with "/" use prefix matching.
-func WithSkipPaths(paths ...string) LoggingOption {
-	return func(cfg *loggingConfig) {
+func WithSkipPaths(paths ...string) AccessLogOption {
+	return func(cfg *accessLogConfig) {
 		cfg.skipPaths = paths
 	}
 }
 
 // WithHook sets a custom hook function called after each request.
-func WithHook(fn LoggingHookFunc) LoggingOption {
-	return func(cfg *loggingConfig) {
+func WithHook(fn AccessLogHookFunc) AccessLogOption {
+	return func(cfg *accessLogConfig) {
 		cfg.hook = fn
+	}
+}
+
+// WithSlowThreshold sets the slow request detection threshold.
+// Requests exceeding this duration will generate an additional WARN log.
+func WithSlowThreshold(d time.Duration) AccessLogOption {
+	return func(cfg *accessLogConfig) {
+		cfg.slowThreshold = d
+	}
+}
+
+// WithBodyLog enables request body logging in access logs.
+// maxBytes controls the maximum number of bytes to log per field;
+// body exceeding this limit is truncated and a "body_truncated": true field is appended.
+// Only text-like content types are captured; binary, multipart, and gRPC types are skipped.
+func WithBodyLog(maxBytes int) AccessLogOption {
+	return func(cfg *accessLogConfig) {
+		cfg.bodyLogMax = maxBytes
 	}
 }
 
@@ -59,9 +87,35 @@ func isSkipped(path string, skipPaths []string) bool {
 	return false
 }
 
-// Logging returns a middleware that logs each HTTP request with structured fields.
-func Logging(opts ...LoggingOption) gin.HandlerFunc {
-	var cfg loggingConfig
+// isLoggableContentType returns true for text-like content types safe to log.
+func isLoggableContentType(ct string) bool {
+	if ct == "" {
+		return false
+	}
+	switch {
+	case strings.HasPrefix(ct, "text/"):
+		return true
+	case strings.HasPrefix(ct, "application/json"):
+		return true
+	case strings.HasPrefix(ct, "application/x-www-form-urlencoded"):
+		return true
+	case strings.HasPrefix(ct, "application/xml"):
+		return true
+	}
+	return false
+}
+
+// truncateBody truncates a byte slice to max bytes and returns whether it was truncated.
+func truncateBody(b []byte, max int) ([]byte, bool) {
+	if max <= 0 || len(b) <= max {
+		return b, false
+	}
+	return b[:max], true
+}
+
+// AccessLog returns a middleware that logs each HTTP request with structured fields.
+func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
+	var cfg accessLogConfig
 	for _, opt := range opts {
 		opt(&cfg)
 	}
@@ -69,6 +123,18 @@ func Logging(opts ...LoggingOption) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		path := c.Request.URL.Path
+
+		// Read request body before c.Next() consumes it.
+		var reqBody []byte
+		if cfg.bodyLogMax > 0 {
+			ct := c.ContentType()
+			if isLoggableContentType(ct) {
+				var buf bytes.Buffer
+				reqBody, _ = io.ReadAll(io.TeeReader(c.Request.Body, &buf))
+				c.Request.Body = io.NopCloser(&buf)
+			}
+		}
+
 		c.Next()
 
 		if isSkipped(path, cfg.skipPaths) {
@@ -79,6 +145,7 @@ func Logging(opts ...LoggingOption) gin.HandlerFunc {
 		status := c.Writer.Status()
 		reqID, _ := c.Get("X-Request-Id")
 		clientIP := c.ClientIP()
+		ct := c.ContentType()
 
 		// Build log args directly as a slice (avoids intermediate map allocation).
 		args := []any{
@@ -86,8 +153,13 @@ func Logging(opts ...LoggingOption) gin.HandlerFunc {
 			"path", path,
 			"status", status,
 			"latency", latency.String(),
+			"latency_ms", float64(latency) / float64(time.Millisecond),
 			"client_ip", clientIP,
+			"request_size", c.Request.ContentLength,
 			"response_size", c.Writer.Size(),
+		}
+		if ct != "" {
+			args = append(args, "content_type", ct)
 		}
 		if reqID != nil {
 			args = append(args, "request_id", reqID)
@@ -97,6 +169,37 @@ func Logging(opts ...LoggingOption) gin.HandlerFunc {
 		if ExtractTraceID != nil {
 			if traceID := ExtractTraceID(ctx); traceID != "" {
 				args = append(args, "trace_id", traceID)
+			}
+		}
+		if ExtractSpanID != nil {
+			if spanID := ExtractSpanID(ctx); spanID != "" {
+				args = append(args, "span_id", spanID)
+			}
+		}
+
+		if query := c.Request.URL.RawQuery; query != "" {
+			args = append(args, "query", query)
+		}
+		if ua := c.Request.UserAgent(); ua != "" {
+			args = append(args, "user_agent", ua)
+		}
+		if route := c.FullPath(); route != "" {
+			args = append(args, "route", route)
+		}
+
+		// Request body logging.
+		if len(reqBody) > 0 {
+			body, truncated := truncateBody(reqBody, cfg.bodyLogMax)
+			args = append(args, "request_body", string(body))
+			if truncated {
+				args = append(args, "body_truncated", true)
+			}
+		}
+
+		// Extract error_code from application error if present.
+		if appErrVal, exists := c.Get("app_error"); exists {
+			if appErr, ok := appErrVal.(*errors.Error); ok && appErr.Code != "" {
+				args = append(args, "error_code", appErr.Code)
 			}
 		}
 
@@ -114,6 +217,16 @@ func Logging(opts ...LoggingOption) gin.HandlerFunc {
 			log.Warn(ctx, "request completed", args...)
 		default:
 			log.Info(ctx, "request completed", args...)
+		}
+
+		// Slow request detection.
+		if cfg.slowThreshold > 0 && latency > cfg.slowThreshold {
+			slowArgs := []any{
+				"path", path,
+				"latency_ms", float64(latency) / float64(time.Millisecond),
+				"threshold_ms", float64(cfg.slowThreshold) / float64(time.Millisecond),
+			}
+			log.Warn(ctx, "slow request", slowArgs...)
 		}
 	}
 }
@@ -136,4 +249,47 @@ func mapToSlice(m map[string]any) []any {
 		args = append(args, k, v)
 	}
 	return args
+}
+
+// RequestLoggerOption configures the WithRequestLogger middleware.
+type RequestLoggerOption func(*requestLoggerConfig)
+
+type requestLoggerConfig struct{}
+
+// WithRequestLogger returns a middleware that creates a request-scoped Logger
+// enriched with trace_id, span_id, and request_id, and stores it in the context.
+// Downstream handlers can retrieve it via log.FromContext(ctx).
+func WithRequestLogger(opts ...RequestLoggerOption) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		base := log.FromContext(c.Request.Context())
+
+		var fields []any
+
+		// Extract request_id from gin context (set by requestid middleware).
+		if reqID, exists := c.Get("X-Request-Id"); exists {
+			fields = append(fields, "request_id", reqID)
+		}
+
+		ctx := c.Request.Context()
+
+		// Extract trace_id.
+		if ExtractTraceID != nil {
+			if traceID := ExtractTraceID(ctx); traceID != "" {
+				fields = append(fields, "trace_id", traceID)
+			}
+		}
+
+		// Extract span_id.
+		if ExtractSpanID != nil {
+			if spanID := ExtractSpanID(ctx); spanID != "" {
+				fields = append(fields, "span_id", spanID)
+			}
+		}
+
+		child := base.With(fields...)
+		newCtx := log.NewContext(ctx, child)
+		c.Request = c.Request.WithContext(newCtx)
+
+		c.Next()
+	}
 }

@@ -7,45 +7,52 @@ import (
 )
 
 type slogLogger struct {
-	sl    *slog.Logger
-	level Level // TODO: use atomic.Int32 for concurrent SetLevel safety
+	al *AtomicLevel
+	sl *slog.Logger
 }
 
 // NewSlog creates a Logger backed by Go stdlib slog.
 // If sl is nil, slog.Default() is used.
 func NewSlog(sl ...*slog.Logger) Logger {
 	if len(sl) > 0 && sl[0] != nil {
-		return &slogLogger{sl: sl[0]}
+		return &slogLogger{al: NewAtomicLevel(LevelDebug), sl: sl[0]}
 	}
-	return &slogLogger{sl: slog.Default()}
+	return &slogLogger{al: NewAtomicLevel(LevelDebug), sl: slog.Default()}
 }
 
 func (l *slogLogger) Info(ctx context.Context, msg string, args ...any) {
-	if l.level > LevelInfo {
+	if !l.al.Enabled(LevelInfo) {
 		return
 	}
 	l.sl.InfoContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Error(ctx context.Context, msg string, args ...any) {
-	if l.level > LevelError {
+	if !l.al.Enabled(LevelError) {
 		return
 	}
 	l.sl.ErrorContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Warn(ctx context.Context, msg string, args ...any) {
-	if l.level > LevelWarn {
+	if !l.al.Enabled(LevelWarn) {
 		return
 	}
 	l.sl.WarnContext(ctx, msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Debug(ctx context.Context, msg string, args ...any) {
-	if l.level > LevelDebug {
+	if !l.al.Enabled(LevelDebug) {
 		return
 	}
 	l.sl.DebugContext(ctx, msg, normalizeArgs(args)...)
+}
+
+func (l *slogLogger) Trace(ctx context.Context, msg string, args ...any) {
+	if !l.al.Enabled(LevelTrace) {
+		return
+	}
+	l.sl.Log(ctx, slog.Level(-8), msg, normalizeArgs(args)...)
 }
 
 func (l *slogLogger) Fatal(ctx context.Context, msg string, args ...any) {
@@ -54,11 +61,11 @@ func (l *slogLogger) Fatal(ctx context.Context, msg string, args ...any) {
 }
 
 func (l *slogLogger) With(args ...any) Logger {
-	return &slogLogger{sl: l.sl.With(normalizeArgs(args)...), level: l.level}
+	return &slogLogger{al: l.al, sl: l.sl.With(normalizeArgs(args)...)}
 }
 
 func (l *slogLogger) SetLevel(level Level) {
-	l.level = level
+	l.al.SetLevel(level)
 }
 
 func (l *slogLogger) Close() error {

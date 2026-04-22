@@ -98,7 +98,14 @@ func New(opts ...Option) *App {
 	if env == EnvDev {
 		logOutput = zerolog.ConsoleWriter{Out: os.Stderr}
 	}
-	log.SetDefault(log.NewZerolog(zerolog.New(logOutput).With().Timestamp().Logger()))
+	builder := zerolog.New(logOutput).With().Timestamp()
+	if env == EnvDev {
+		// CallerWithSkipFrameCount(4) skips internal frames:
+		// zerolog hook infra (2) + zerologLogger adapter (1) + log.Info wrapper (1)
+		// so the reported caller points to user code.
+		builder = builder.CallerWithSkipFrameCount(4)
+	}
+	log.SetDefault(log.NewZerolog(builder.Logger()))
 
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
@@ -123,6 +130,7 @@ func New(opts ...Option) *App {
 		} else {
 			app.telemetryShutdown = shutdown
 			middleware.ExtractTraceID = telemetry.ExtractTraceID
+			middleware.ExtractSpanID = telemetry.ExtractSpanID
 			app.telemetryServiceName = telCfg.ServiceName
 			app.telemetryTracesEnabled = telCfg.TracesEnabled
 		}

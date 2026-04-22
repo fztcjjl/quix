@@ -148,6 +148,7 @@ func NewServer(opts ...Option) *Server {
 		if o.telemetryServiceName != "" && o.telemetryTracesEnabled {
 			engine.Use(otelgin.Middleware(o.telemetryServiceName))
 		}
+		engine.Use(middleware.WithRequestLogger())
 		engine.Use(middleware.Recovery())
 		if o.corsEnabled {
 			if o.corsConfig != nil {
@@ -157,7 +158,7 @@ func NewServer(opts ...Option) *Server {
 			}
 		}
 		engine.Use(
-			middleware.Logging(middleware.WithSkipPaths(o.loggingSkipPaths...)),
+			middleware.AccessLog(middleware.WithSkipPaths(o.loggingSkipPaths...)),
 			middleware.ResponseMiddleware(),
 		)
 	}
