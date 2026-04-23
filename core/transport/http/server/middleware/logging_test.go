@@ -518,7 +518,7 @@ func TestLoggingErrorCodeField(t *testing.T) {
 	}
 }
 
-func TestLoggingNoErrorCodeForPlainError(t *testing.T) {
+func TestLoggingErrorCodeForPlainError(t *testing.T) {
 	cap := &captureLogger{}
 	log.SetDefault(cap)
 
@@ -535,8 +535,36 @@ func TestLoggingNoErrorCodeForPlainError(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	fields := cap.toMap()
-	if _, ok := fields["error_code"]; ok {
-		t.Error("error_code field should not be present for plain errors")
+	if fields["error_code"] != "internal_error" {
+		t.Errorf("error_code = %v, want internal_error", fields["error_code"])
+	}
+	if fields["error_message"] != "something went wrong" {
+		t.Errorf("error_message = %v, want %q", fields["error_message"], "something went wrong")
+	}
+}
+
+func TestLoggingErrorMessageField(t *testing.T) {
+	cap := &captureLogger{}
+	log.SetDefault(cap)
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.Use(AccessLog())
+	r.GET("/error", func(c *gin.Context) {
+		c.Set("app_error", &qerrors.Error{Code: "not_found", Message: "user not found", StatusCode: 404})
+		c.String(http.StatusNotFound, "not found")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/error", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if fields["error_code"] != "not_found" {
+		t.Errorf("error_code = %v, want not_found", fields["error_code"])
+	}
+	if fields["error_message"] != "user not found" {
+		t.Errorf("error_message = %v, want %q", fields["error_message"], "user not found")
 	}
 }
 

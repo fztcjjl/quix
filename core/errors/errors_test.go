@@ -3,6 +3,7 @@ package errors_test
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	qerrors "github.com/fztcjjl/quix/core/errors"
@@ -105,4 +106,54 @@ func TestErrorIsComparableWithErrorsIs(t *testing.T) {
 	if !errors.Is(e, e) {
 		t.Error("errors.Is should return true for same pointer")
 	}
+}
+
+func TestResolveAppError(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		got, ok := qerrors.ResolveAppError(nil)
+		if ok {
+			t.Fatal("expected ok=false for nil")
+		}
+		if got != nil {
+			t.Fatal("expected nil Error for nil input")
+		}
+	})
+
+	t.Run("structured error", func(t *testing.T) {
+		err := &qerrors.Error{Code: "not_found", Message: "gone", StatusCode: 404}
+		got, ok := qerrors.ResolveAppError(err)
+		if !ok {
+			t.Fatal("expected ok=true")
+		}
+		if got != err {
+			t.Error("should return the same pointer for *Error")
+		}
+	})
+
+	t.Run("native error", func(t *testing.T) {
+		native := fmt.Errorf("db connection failed")
+		got, ok := qerrors.ResolveAppError(native)
+		if !ok {
+			t.Fatal("expected ok=true")
+		}
+		if got.Code != "internal_error" {
+			t.Errorf("Code = %q, want %q", got.Code, "internal_error")
+		}
+		if got.Message != "db connection failed" {
+			t.Errorf("Message = %q, want %q", got.Message, "db connection failed")
+		}
+		if got.StatusCode != 500 {
+			t.Errorf("StatusCode = %d, want 500", got.StatusCode)
+		}
+	})
+
+	t.Run("non-error value", func(t *testing.T) {
+		got, ok := qerrors.ResolveAppError("just a string")
+		if ok {
+			t.Fatal("expected ok=false for non-error value")
+		}
+		if got != nil {
+			t.Fatal("expected nil Error for non-error value")
+		}
+	})
 }

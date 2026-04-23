@@ -18,7 +18,6 @@ import (
 	"github.com/fztcjjl/quix/core/telemetry"
 	"github.com/fztcjjl/quix/core/transport"
 	qhttp "github.com/fztcjjl/quix/core/transport/http/server"
-	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -68,6 +67,11 @@ func ginModeForEnv(env Environment) string {
 	}
 }
 
+// isProdEnv returns true for production-like environments.
+func isProdEnv(env Environment) bool {
+	return env == EnvProd || env == EnvStaging
+}
+
 // App is the core framework application.
 type App struct {
 	options
@@ -99,6 +103,9 @@ func New(opts ...Option) *App {
 	var logOutput io.Writer = os.Stderr
 	if env == EnvDev {
 		logOutput = zerolog.ConsoleWriter{Out: os.Stderr}
+	} else {
+		zerolog.MessageFieldName = "msg"
+		zerolog.TimestampFieldName = "ts"
 	}
 	builder := zerolog.New(logOutput).With().Timestamp()
 	if env == EnvDev {
@@ -138,11 +145,6 @@ func New(opts ...Option) *App {
 			app.telCfg = telCfg
 		}
 	}
-	// Production mode: hide internal error details from HTTP responses and logs
-	if app.env == EnvProd || app.env == EnvStaging {
-		middleware.HideInternalErrors = true
-		middleware.HideStackTraces = true
-	}
 	// Config-driven server creation:
 	// - If http is configured (http.addr or http.port), start HTTP server
 	// - If rpc is configured (rpc.addr), start RPC server
@@ -159,6 +161,13 @@ func New(opts ...Option) *App {
 		}
 		if len(app.loggingSkipPaths) > 0 {
 			serverOpts = append(serverOpts, qhttp.WithLoggingSkipPaths(app.loggingSkipPaths...))
+		}
+		if app.env == EnvDev {
+			serverOpts = append(serverOpts, qhttp.WithBodyLog(1024))
+		}
+		if isProdEnv(app.env) {
+			serverOpts = append(serverOpts, qhttp.WithHideInternalErrors(true))
+			serverOpts = append(serverOpts, qhttp.WithHideStackTraces(true))
 		}
 		app.httpServer = qhttp.NewServer(serverOpts...)
 

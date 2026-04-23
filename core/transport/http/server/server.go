@@ -23,15 +23,18 @@ type Server struct {
 type Option func(*options)
 
 type options struct {
-	addr              string
-	defaultMiddleware bool
-	readHeaderTimeout time.Duration
-	readTimeout       time.Duration
-	writeTimeout      time.Duration
-	idleTimeout       time.Duration
-	corsEnabled       bool
-	corsConfig        *cors.Config
-	loggingSkipPaths  []string
+	addr               string
+	defaultMiddleware  bool
+	readHeaderTimeout  time.Duration
+	readTimeout        time.Duration
+	writeTimeout       time.Duration
+	idleTimeout        time.Duration
+	corsEnabled        bool
+	corsConfig         *cors.Config
+	loggingSkipPaths   []string
+	bodyLogMax         int
+	hideInternalErrors bool
+	hideStackTraces    bool
 }
 
 // WithAddr sets the server listen address.
@@ -100,6 +103,30 @@ func WithLoggingSkipPaths(paths ...string) Option {
 	}
 }
 
+// WithBodyLog enables request body logging in access logs.
+// maxBytes controls the maximum number of bytes to log per request.
+// A value of 0 (default) disables body logging.
+func WithBodyLog(maxBytes int) Option {
+	return func(o *options) {
+		o.bodyLogMax = maxBytes
+	}
+}
+
+// WithHideInternalErrors controls whether ResponseMiddleware hides raw error messages
+// from non-qerrors.Error in HTTP responses.
+func WithHideInternalErrors(v bool) Option {
+	return func(o *options) {
+		o.hideInternalErrors = v
+	}
+}
+
+// WithHideStackTraces controls whether Recovery omits full stack traces from logs.
+func WithHideStackTraces(v bool) Option {
+	return func(o *options) {
+		o.hideStackTraces = v
+	}
+}
+
 // NewServer creates a new HTTP Server with Gin engine.
 func NewServer(opts ...Option) *Server {
 	o := &options{
@@ -129,7 +156,7 @@ func NewServer(opts ...Option) *Server {
 	if o.defaultMiddleware {
 		engine.Use(requestid.New())
 		engine.Use(middleware.WithRequestLogger())
-		engine.Use(middleware.Recovery())
+		engine.Use(middleware.Recovery(middleware.WithHideStackTraces(o.hideStackTraces)))
 		if o.corsEnabled {
 			if o.corsConfig != nil {
 				engine.Use(middleware.WithCORSConfig(*o.corsConfig))
@@ -138,8 +165,8 @@ func NewServer(opts ...Option) *Server {
 			}
 		}
 		engine.Use(
-			middleware.AccessLog(middleware.WithSkipPaths(o.loggingSkipPaths...)),
-			middleware.ResponseMiddleware(),
+			middleware.AccessLog(middleware.WithSkipPaths(o.loggingSkipPaths...), middleware.WithBodyLog(o.bodyLogMax)),
+			middleware.ResponseMiddleware(middleware.WithHideInternalErrors(o.hideInternalErrors)),
 		)
 	}
 

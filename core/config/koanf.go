@@ -1,13 +1,21 @@
 package config
 
 import (
+	"os"
 	"strings"
 
+	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/parsers/yaml"
+	"github.com/knadh/koanf/providers/confmap"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
+
+// normalizeEnvKey converts SERVER_PORT to server.port, matching the env provider convention.
+func normalizeEnvKey(s string) string {
+	return strings.ReplaceAll(strings.ToLower(s), "_", ".")
+}
 
 type koanfConfig struct {
 	k *koanf.Koanf
@@ -28,8 +36,9 @@ func WithFile(path string) Option {
 }
 
 // NewKoanf creates a Config backed by koanf.
-// It loads configuration from the given options (file, env).
-// Environment variables take precedence over file values.
+// It loads configuration from .env file and environment variables.
+// If present, a .env file in the working directory is loaded automatically.
+// Priority (low to high): YAML file < .env file < environment variables.
 func NewKoanf(opts ...Option) (Config, error) {
 	o := &options{}
 	for _, opt := range opts {
@@ -45,10 +54,27 @@ func NewKoanf(opts ...Option) (Config, error) {
 		}
 	}
 
+	// Load .env file (higher priority than file, lower than env vars)
+	if _, err := os.Stat(".env"); err == nil {
+		data, err := os.ReadFile(".env")
+		if err != nil {
+			return nil, err
+		}
+		parsed, err := dotenv.Parser().Unmarshal(data)
+		if err != nil {
+			return nil, err
+		}
+		normalized := make(map[string]any, len(parsed))
+		for key, val := range parsed {
+			normalized[normalizeEnvKey(key)] = val
+		}
+		if err := k.Load(confmap.Provider(normalized, "."), nil); err != nil {
+			return nil, err
+		}
+	}
+
 	// Load env (higher priority)
-	if err := k.Load(env.Provider("", ".", func(s string) string {
-		return strings.ReplaceAll(strings.ToLower(s), "_", ".")
-	}), nil); err != nil {
+	if err := k.Load(env.Provider("", ".", normalizeEnvKey), nil); err != nil {
 		return nil, err
 	}
 

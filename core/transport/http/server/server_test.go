@@ -4,12 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/fztcjjl/quix/core/errors"
+	"github.com/fztcjjl/quix/core/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -213,4 +217,93 @@ func TestServerDefaultMiddlewareStandardError(t *testing.T) {
 	if errObj["code"] != "internal_error" {
 		t.Errorf("error.code = %v, want %q", errObj["code"], "internal_error")
 	}
+}
+
+func TestServerBodyLogOption(t *testing.T) {
+	cap := &testCaptureLogger{}
+	log.SetDefault(cap)
+
+	s := NewServer(WithBodyLog(1024))
+	s.POST("/echo", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := `{"user":"alice"}`
+	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if fields["request_body"] != body {
+		t.Errorf("request_body = %v, want %v", fields["request_body"], body)
+	}
+}
+
+func TestServerBodyLogDisabledByDefault(t *testing.T) {
+	cap := &testCaptureLogger{}
+	log.SetDefault(cap)
+
+	s := NewServer()
+	s.POST("/echo", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
+
+	body := `{"user":"alice"}`
+	req := httptest.NewRequest(http.MethodPost, "/echo", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.ServeHTTP(w, req)
+
+	fields := cap.toMap()
+	if _, ok := fields["request_body"]; ok {
+		t.Error("request_body should not be present when WithBodyLog is not configured")
+	}
+}
+
+// testCaptureLogger captures log records for testing.
+type testCaptureLogger struct {
+	records []testCaptureRecord
+	mu      sync.Mutex
+}
+
+type testCaptureRecord struct {
+	level slog.Level
+	msg   string
+	args  []any
+}
+
+func (l *testCaptureLogger) Trace(_ context.Context, msg string, args ...any) {
+	l.add(slog.Level(-8), msg, args)
+}
+func (l *testCaptureLogger) Info(_ context.Context, msg string, args ...any) {
+	l.add(slog.LevelInfo, msg, args)
+}
+func (l *testCaptureLogger) Error(_ context.Context, msg string, args ...any) {
+	l.add(slog.LevelError, msg, args)
+}
+func (l *testCaptureLogger) Warn(_ context.Context, msg string, args ...any) {
+	l.add(slog.LevelWarn, msg, args)
+}
+func (l *testCaptureLogger) Debug(_ context.Context, msg string, args ...any) {
+	l.add(slog.LevelDebug, msg, args)
+}
+func (l *testCaptureLogger) Fatal(_ context.Context, _ string, _ ...any) {}
+func (l *testCaptureLogger) With(_ ...any) log.Logger                    { return l }
+func (l *testCaptureLogger) SetLevel(_ log.Level)                        {}
+func (l *testCaptureLogger) Close() error                                { return nil }
+
+func (l *testCaptureLogger) add(level slog.Level, msg string, args []any) {
+	l.mu.Lock()
+	l.records = append(l.records, testCaptureRecord{level, msg, args})
+	l.mu.Unlock()
+}
+
+func (l *testCaptureLogger) toMap() map[string]any {
+	m := make(map[string]any)
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for _, r := range l.records {
+		for i := 0; i+1 < len(r.args); i += 2 {
+			key, _ := r.args[i].(string)
+			m[key] = r.args[i+1]
+		}
+	}
+	return m
 }

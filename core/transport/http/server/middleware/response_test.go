@@ -143,12 +143,8 @@ func TestResponseMiddlewareErrorWithDetails(t *testing.T) {
 }
 
 func TestResponseMiddlewareHideInternalErrors(t *testing.T) {
-	// Verify that HideInternalErrors replaces raw error messages with a generic status text.
-	middleware.HideInternalErrors = true
-	defer func() { middleware.HideInternalErrors = false }()
-
 	r := gin.New()
-	r.Use(middleware.ResponseMiddleware())
+	r.Use(middleware.ResponseMiddleware(middleware.WithHideInternalErrors(true)))
 	r.GET("/test", server.Handler(func(c *gin.Context) error {
 		return fmt.Errorf("database connection failed")
 	}))

@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func writeTestEnv(t *testing.T, dir string, content string) string {
+	t.Helper()
+	path := filepath.Join(dir, ".env")
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatalf("failed to write test .env: %v", err)
+	}
+	return path
+}
+
 func writeTestYAML(t *testing.T, content string) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -144,5 +153,93 @@ func TestNewKoanfFileNotFound(t *testing.T) {
 	_, err := NewKoanf(WithFile("/nonexistent/config.yaml"))
 	if err == nil {
 		t.Fatal("expected error for nonexistent file")
+	}
+}
+
+func TestEnvFileLoaded(t *testing.T) {
+	dir := t.TempDir()
+	writeTestEnv(t, dir, "APP_NAME=fromenvfile")
+
+	// .env is loaded from cwd, so we must chdir
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	defer os.Chdir(old)
+
+	cfg, err := NewKoanf()
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.String("app.name") != "fromenvfile" {
+		t.Errorf("expected fromenvfile, got %s", cfg.String("app.name"))
+	}
+}
+
+func TestEnvFileSkippedWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	// No .env file in dir
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	defer os.Chdir(old)
+
+	_, err = NewKoanf()
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+}
+
+func TestEnvVarOverridesEnvFile(t *testing.T) {
+	dir := t.TempDir()
+	writeTestEnv(t, dir, "SERVER_PORT=3000")
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	defer os.Chdir(old)
+
+	t.Setenv("SERVER_PORT", "9090")
+
+	cfg, err := NewKoanf()
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.Int("server.port") != 9090 {
+		t.Errorf("expected 9090 (env override), got %d", cfg.Int("server.port"))
+	}
+}
+
+func TestEnvFileOverridesYAML(t *testing.T) {
+	dir := t.TempDir()
+	yamlContent := "server:\n  port: 8080"
+	yamlPath := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(yamlPath, []byte(yamlContent), 0600); err != nil {
+		t.Fatal(err)
+	}
+	writeTestEnv(t, dir, "SERVER_PORT=3000")
+
+	old, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(dir)
+	defer os.Chdir(old)
+
+	cfg, err := NewKoanf(WithFile(yamlPath))
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.Int("server.port") != 3000 {
+		t.Errorf("expected 3000 (from .env), got %d", cfg.Int("server.port"))
 	}
 }

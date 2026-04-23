@@ -182,10 +182,15 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 			}
 		}
 
-		// Extract error_code from application error if present.
-		if appErrVal, exists := c.Get("app_error"); exists {
-			if appErr, ok := appErrVal.(*errors.Error); ok && appErr.Code != "" {
-				args = append(args, "error_code", appErr.Code)
+		// Extract error fields from application error if present.
+		if raw, exists := c.Get("app_error"); exists {
+			if appErr, ok := errors.ResolveAppError(raw); ok {
+				if appErr.Code != "" {
+					args = append(args, "error_code", appErr.Code)
+				}
+				if appErr.Message != "" {
+					args = append(args, "error_message", appErr.Message)
+				}
 			}
 		}
 
@@ -198,11 +203,11 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 
 		switch {
 		case status >= http.StatusInternalServerError:
-			log.Error(ctx, "request completed", args...)
+			log.Error(ctx, "access", args...)
 		case status >= http.StatusBadRequest:
-			log.Warn(ctx, "request completed", args...)
+			log.Warn(ctx, "access", args...)
 		default:
-			log.Info(ctx, "request completed", args...)
+			log.Info(ctx, "access", args...)
 		}
 
 		// Slow request detection.

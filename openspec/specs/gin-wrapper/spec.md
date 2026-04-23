@@ -131,7 +131,7 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 - **THEN** MUST 将原始 error 存入 `app_error`，由 ResponseMiddleware 包装为 `*Error{Code: "internal_error", StatusCode: 500}` 并格式化响应
 
 ### Requirement: HideInternalErrors controls internal error exposure
-框架 SHALL 提供 `middleware.HideInternalErrors` 包级变量，控制 ResponseMiddleware 是否向客户端隐藏非 `qerrors.Error` 类型的原始错误消息。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动设置为 true。
+框架 SHALL 提供 `middleware.WithHideInternalErrors(bool)` Option，控制 ResponseMiddleware 是否向客户端隐藏非 `*qerrors.Error` 类型的原始错误消息。Server 提供 `qhttp.WithHideInternalErrors(bool)` Option 桥接。`quix.New()` MUST 在 `EnvProd` 或 `EnvStaging` 环境下自动传入 `true`。
 
 #### Scenario: Production hides internal error
 - **WHEN** `QUIX_ENV=prod` 且 handler 返回 `fmt.Errorf("connection refused: host=db.internal:5432")`
@@ -151,8 +151,8 @@ Handler 函数 SHALL 直接使用 `*gin.Context`，不封装 quix.Context。
 #### Scenario: Standard error wrapped by ResponseMiddleware
 - **WHEN** handler 返回非 `*qerrors.Error` 的标准 error
 - **THEN** ResponseMiddleware MUST 自动包装为 `*Error{Code: "internal_error", StatusCode: 500, Message: err.Error()}`，并设置对应 HTTP status
-  - 当 `HideInternalErrors` 为 true 时：Message 为 "Internal Server Error"
-  - 当 `HideInternalErrors` 为 false 时：Message 为原始错误消息
+  - 当 `WithHideInternalErrors(true)` 时：Message 为 "Internal Server Error"
+  - 当 `WithHideInternalErrors(false)` 时：Message 为原始错误消息
 
 #### Scenario: No error skips formatting
 - **WHEN** handler 正常执行且未返回错误
