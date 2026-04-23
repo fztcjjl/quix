@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"bytes"
-	"context"
 	"io"
 	"net/http"
 	"strings"
@@ -10,22 +9,13 @@ import (
 
 	"github.com/fztcjjl/quix/core/errors"
 	"github.com/fztcjjl/quix/core/log"
+	"github.com/fztcjjl/quix/core/telemetry"
 	"github.com/gin-gonic/gin"
 )
 
 // AccessLogHookFunc is called after each request with the collected log fields.
 // It can be used to add custom fields or perform side effects.
 type AccessLogHookFunc func(c *gin.Context, fields map[string]any)
-
-// ExtractTraceID extracts trace_id from context for logging middleware.
-// Set this variable to enable trace_id output in access logs.
-// When nil (default), no trace_id is included in log output.
-var ExtractTraceID func(ctx context.Context) string
-
-// ExtractSpanID extracts span_id from context for logging middleware.
-// Set this variable to enable span_id output in access logs.
-// When nil (default), no span_id is included in log output.
-var ExtractSpanID func(ctx context.Context) string
 
 // accessLogConfig holds configuration for the access log middleware.
 type accessLogConfig struct {
@@ -166,15 +156,11 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		if ExtractTraceID != nil {
-			if traceID := ExtractTraceID(ctx); traceID != "" {
-				args = append(args, "trace_id", traceID)
-			}
+		if traceID := telemetry.ExtractTraceID(ctx); traceID != "" {
+			args = append(args, "trace_id", traceID)
 		}
-		if ExtractSpanID != nil {
-			if spanID := ExtractSpanID(ctx); spanID != "" {
-				args = append(args, "span_id", spanID)
-			}
+		if spanID := telemetry.ExtractSpanID(ctx); spanID != "" {
+			args = append(args, "span_id", spanID)
 		}
 
 		if query := c.Request.URL.RawQuery; query != "" {
@@ -273,17 +259,13 @@ func WithRequestLogger(opts ...RequestLoggerOption) gin.HandlerFunc {
 		ctx := c.Request.Context()
 
 		// Extract trace_id.
-		if ExtractTraceID != nil {
-			if traceID := ExtractTraceID(ctx); traceID != "" {
-				fields = append(fields, "trace_id", traceID)
-			}
+		if traceID := telemetry.ExtractTraceID(ctx); traceID != "" {
+			fields = append(fields, "trace_id", traceID)
 		}
 
 		// Extract span_id.
-		if ExtractSpanID != nil {
-			if spanID := ExtractSpanID(ctx); spanID != "" {
-				fields = append(fields, "span_id", spanID)
-			}
+		if spanID := telemetry.ExtractSpanID(ctx); spanID != "" {
+			fields = append(fields, "span_id", spanID)
 		}
 
 		child := base.With(fields...)

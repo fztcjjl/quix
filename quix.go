@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	"github.com/fztcjjl/quix/core/transport/http/server/middleware"
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // defaultShutdownTimeout is the maximum duration for graceful shutdown.
@@ -68,11 +71,10 @@ func ginModeForEnv(env Environment) string {
 // App is the core framework application.
 type App struct {
 	options
-	httpServer             *qhttp.Server
-	rpcServer              transport.Server
-	telemetryShutdown      func(context.Context) error
-	telemetryServiceName   string
-	telemetryTracesEnabled bool
+	httpServer        *qhttp.Server
+	rpcServer         transport.Server
+	telemetryShutdown func(context.Context) error
+	telCfg            *telemetry.Config
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -100,12 +102,16 @@ func New(opts ...Option) *App {
 	}
 	builder := zerolog.New(logOutput).With().Timestamp()
 	if env == EnvDev {
-		// CallerWithSkipFrameCount(4) skips internal frames:
-		// zerolog hook infra (2) + zerologLogger adapter (1) + log.Info wrapper (1)
-		// so the reported caller points to user code.
-		builder = builder.CallerWithSkipFrameCount(4)
+		zerolog.CallerMarshalFunc = func(pc uintptr, file string, line int) string {
+			return filepath.Join(
+				filepath.Base(filepath.Dir(file)),
+				filepath.Base(file),
+			) + ":" + strconv.Itoa(line)
+		}
+		log.SetDefault(log.NewZerolog(builder.Logger(), log.WithCaller()))
+	} else {
+		log.SetDefault(log.NewZerolog(builder.Logger()))
 	}
-	log.SetDefault(log.NewZerolog(builder.Logger()))
 
 	defaultCfg, _ := config.NewKoanf()
 	app := &App{
@@ -129,10 +135,7 @@ func New(opts ...Option) *App {
 			log.Warn(context.Background(), "telemetry init failed, running without telemetry", "error", err)
 		} else {
 			app.telemetryShutdown = shutdown
-			middleware.ExtractTraceID = telemetry.ExtractTraceID
-			middleware.ExtractSpanID = telemetry.ExtractSpanID
-			app.telemetryServiceName = telCfg.ServiceName
-			app.telemetryTracesEnabled = telCfg.TracesEnabled
+			app.telCfg = telCfg
 		}
 	}
 	// Production mode: hide internal error details from HTTP responses and logs
@@ -150,12 +153,6 @@ func New(opts ...Option) *App {
 	if app.httpServer == nil && (hasHttpConfig || !hasRpcConfig) {
 		var serverOpts []qhttp.Option
 		serverOpts = append(serverOpts, qhttp.WithAddr(resolveHttpAddr(app.config)))
-		if len(app.telemetryOpts) > 0 {
-			serverOpts = append(serverOpts,
-				qhttp.WithTelemetryServiceName(app.telemetryServiceName),
-				qhttp.WithTelemetryTracesEnabled(app.telemetryTracesEnabled),
-			)
-		}
 		serverOpts = append(serverOpts, qhttp.WithCORS(app.corsEnabled))
 		if app.corsConfig != nil {
 			serverOpts = append(serverOpts, qhttp.WithCORSConfig(*app.corsConfig))
@@ -164,6 +161,13 @@ func New(opts ...Option) *App {
 			serverOpts = append(serverOpts, qhttp.WithLoggingSkipPaths(app.loggingSkipPaths...))
 		}
 		app.httpServer = qhttp.NewServer(serverOpts...)
+
+		// Mount otelgin middleware after server creation if telemetry is enabled.
+		// otelgin is inserted after RequestID (already mounted by default middleware)
+		// but before the remaining middleware by inserting at position 1.
+		if app.telCfg != nil && app.telCfg.TracesEnabled {
+			app.httpServer.Use(otelgin.Middleware(app.telCfg.ServiceName))
+		}
 	}
 	// TODO: create RPC server when RPC transport is implemented
 	// if app.rpcServer == nil && hasRpcConfig { ... }

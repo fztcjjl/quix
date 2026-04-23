@@ -1,3 +1,5 @@
+## MODIFIED Requirements
+
 ### Requirement: WithTelemetry Option initializes telemetry
 `quix.WithTelemetry(opts ...telemetry.Option)` SHALL 在 App 创建时调用 `telemetry.Init`，并将返回的 shutdown func 存储到 App 结构体中。App SHALL NOT 存储 `telemetryServiceName` / `telemetryTracesEnabled` 字段，这些信息仅保留在 `telemetry.Config` 中。
 
@@ -9,6 +11,8 @@
 - **WHEN** 调用 `quix.New()` 不传 WithTelemetry
 - **THEN** 不调用 telemetry.Init，无 OTel Provider 创建，otelgin 不挂载
 
+## ADDED Requirements
+
 ### Requirement: quix.New() directly mounts otelgin middleware
 当 telemetry 初始化成功且 `TracesEnabled` 为 true 时，`quix.New()` SHALL 在创建 HTTP server 后直接调用 `app.httpServer.Use(otelgin.Middleware(telCfg.ServiceName))` 挂载 otelgin middleware，不通过 server options 传递遥测配置。
 
@@ -19,14 +23,3 @@
 #### Scenario: otelgin not mounted when traces disabled
 - **WHEN** `quix.New(quix.WithTelemetry(telemetry.WithTracesEnabled(false)))` 创建 App
 - **THEN** otelgin middleware 不挂载到 HTTP engine
-
-### Requirement: App Shutdown flushes telemetry
-`App.Shutdown(ctx)` SHALL 在停止所有 server 之后调用 telemetry shutdown func（如存在），确保 OTel 数据 flush。
-
-#### Scenario: Shutdown order
-- **WHEN** 调用 `app.Shutdown(ctx)` 且 WithTelemetry 已启用
-- **THEN** 按序执行：RPC server stop → HTTP server stop → telemetry shutdown → logger close
-
-#### Scenario: Shutdown without telemetry
-- **WHEN** 调用 `app.Shutdown(ctx)` 且未启用 WithTelemetry
-- **THEN** 仅执行 server stop，不调用 telemetry shutdown

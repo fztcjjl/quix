@@ -10,7 +10,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/requestid"
 	"github.com/gin-gonic/gin"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 // Server implements transport.Server for HTTP using Gin.
@@ -24,17 +23,15 @@ type Server struct {
 type Option func(*options)
 
 type options struct {
-	addr                   string
-	defaultMiddleware      bool
-	readHeaderTimeout      time.Duration
-	readTimeout            time.Duration
-	writeTimeout           time.Duration
-	idleTimeout            time.Duration
-	telemetryServiceName   string
-	telemetryTracesEnabled bool
-	corsEnabled            bool
-	corsConfig             *cors.Config
-	loggingSkipPaths       []string
+	addr              string
+	defaultMiddleware bool
+	readHeaderTimeout time.Duration
+	readTimeout       time.Duration
+	writeTimeout      time.Duration
+	idleTimeout       time.Duration
+	corsEnabled       bool
+	corsConfig        *cors.Config
+	loggingSkipPaths  []string
 }
 
 // WithAddr sets the server listen address.
@@ -44,7 +41,7 @@ func WithAddr(addr string) Option {
 	}
 }
 
-// WithDefaultMiddleware controls whether default middleware (RequestID, Recovery, CORS, Logging, Response) is mounted. Order: RequestID → [otelgin] → Recovery → CORS → Logging → Response.
+// WithDefaultMiddleware controls whether default middleware (RequestID, Recovery, CORS, Logging, Response) is mounted. Order: RequestID → RequestLogger → Recovery → CORS → Logging → Response.
 func WithDefaultMiddleware(enabled bool) Option {
 	return func(o *options) {
 		o.defaultMiddleware = enabled
@@ -76,20 +73,6 @@ func WithWriteTimeout(d time.Duration) Option {
 func WithIdleTimeout(d time.Duration) Option {
 	return func(o *options) {
 		o.idleTimeout = d
-	}
-}
-
-// WithTelemetryServiceName sets the service name for otelgin middleware.
-func WithTelemetryServiceName(name string) Option {
-	return func(o *options) {
-		o.telemetryServiceName = name
-	}
-}
-
-// WithTelemetryTracesEnabled controls whether otelgin middleware is injected.
-func WithTelemetryTracesEnabled(enabled bool) Option {
-	return func(o *options) {
-		o.telemetryTracesEnabled = enabled
 	}
 }
 
@@ -145,9 +128,6 @@ func NewServer(opts ...Option) *Server {
 
 	if o.defaultMiddleware {
 		engine.Use(requestid.New())
-		if o.telemetryServiceName != "" && o.telemetryTracesEnabled {
-			engine.Use(otelgin.Middleware(o.telemetryServiceName))
-		}
 		engine.Use(middleware.WithRequestLogger())
 		engine.Use(middleware.Recovery())
 		if o.corsEnabled {
