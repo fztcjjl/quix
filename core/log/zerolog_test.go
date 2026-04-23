@@ -154,8 +154,8 @@ func TestZerologTimestampField(t *testing.T) {
 
 func TestZerologCallerField(t *testing.T) {
 	var buf bytes.Buffer
-	l := zerolog.New(&buf).With().Timestamp().CallerWithSkipFrameCount(4).Logger()
-	zl := NewZerolog(l)
+	l := zerolog.New(&buf).With().Timestamp().Logger()
+	zl := NewZerolog(l, WithCaller())
 
 	orig := Default()
 	defer SetDefault(orig)
@@ -178,6 +178,35 @@ func TestZerologCallerField(t *testing.T) {
 		t.Fatalf("expected caller to be string, got %T", caller)
 	}
 	// Caller should contain the test file name
+	if !strings.Contains(callerStr, "zerolog_test.go") {
+		t.Errorf("expected caller to contain 'zerolog_test.go', got: %s", callerStr)
+	}
+}
+
+func TestZerologCallerFieldViaFromContext(t *testing.T) {
+	var buf bytes.Buffer
+	l := zerolog.New(&buf).With().Timestamp().Logger()
+	zl := NewZerolog(l, WithCaller())
+
+	ctx := NewContext(context.Background(), zl)
+
+	// Call directly on logger obtained from context (no log.Info() wrapper).
+	FromContext(ctx).Info(ctx, "caller from context")
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON output: %v", err)
+	}
+	caller, ok := m["caller"]
+	if !ok {
+		t.Errorf("expected 'caller' field in output, got: %s", buf.String())
+		return
+	}
+	callerStr, ok := caller.(string)
+	if !ok {
+		t.Fatalf("expected caller to be string, got %T", caller)
+	}
+	// Caller should point to this test file, not zerolog.go or logger.go
 	if !strings.Contains(callerStr, "zerolog_test.go") {
 		t.Errorf("expected caller to contain 'zerolog_test.go', got: %s", callerStr)
 	}

@@ -69,7 +69,16 @@
 
 ## 9. 开发环境 Caller 输出
 
-- [x] 9.1 在 `quix.go` 中，当 `env == EnvDev` 时为默认 zerolog logger 添加 `CallerWithSkipFrameCount(4)` 配置
+- [x] 9.1 在 `quix.go` 中，当 `env == EnvDev` 时为默认 zerolog logger 启用 caller 字段
 - [x] 9.2 编写 `TestZerologTimestampField` 测试，验证 `time` 字段存在于 JSON 输出
 - [x] 9.3 编写 `TestZerologCallerField` 测试，验证 `caller` 字段存在且指向调用方文件（通过包级 `Info()` 调用）
 - [x] 9.4 运行 `go test ./core/log/...` 和 `golangci-lint run ./...`
+
+## 10. 修复 Caller 栈帧遍历
+
+- [x] 10.1 在 `core/log/logger.go` 中新增 `findCaller(skip)` 函数，通过 `runtime.CallersFrames` 遍历调用栈，跳过 `runtime.`、`testing.`、`/core/log/` 内部帧，返回第一个用户代码帧
+- [x] 10.2 在 `core/log/zerolog.go` 中新增 `ZerologOption` 类型、`WithCaller()` 选项，`zerologLogger` 新增 `callerEnabled` 字段和 `addCallerField()` 方法
+- [x] 10.3 修改 `NewZerolog` 签名为 `NewZerolog(l zerolog.Logger, opts ...ZerologOption) Logger`，每个日志方法在输出前调用 `addCallerField`
+- [x] 10.4 修改 `quix.go`，移除 `CallerWithSkipFrameCount(4)`，改用 `NewZerolog(builder.Logger(), log.WithCaller())`
+- [x] 10.5 新增 `TestZerologCallerFieldViaFromContext` 测试，验证 `FromContext(ctx).Info()` 路径的 caller 也正确指向用户代码
+- [x] 10.6 运行 `go test ./...` 和 `golangci-lint run ./...`

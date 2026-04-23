@@ -9,7 +9,7 @@
 - **增强访问日志**：新增 `latency_ms`（数值）、`query`、`user_agent`、`route`（归一化路径）、`span_id`、`error_code` 字段
 - **慢请求检测**：新增 `WithSlowThreshold()` 选项
 - **Context 感知日志**：新增 `IntoContext/FromContext` 和 `RequestLogger` 中间件，handler 自动携带 trace_id/span_id/request_id
-- **开发环境 Caller 输出**：开发环境默认 zerolog logger 启用 `caller` 字段（通过 `CallerWithSkipFrameCount` 跳过框架内部帧），生产环境不加
+- **开发环境 Caller 输出**：开发环境默认 zerolog logger 启用 `caller` 字段（通过 `WithCaller()` 选项 + `findCaller()` 栈帧遍历跳过框架内部帧，对所有调用路径正确），生产环境不加
 - **修复 zerolog 性能**：用类型分发替代 `argsToMap()` 的 map 分配
 - **Level 字符串化**：新增 `String()` 和 `ParseLevel()` 支持配置驱动级别控制
 

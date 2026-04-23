@@ -3,6 +3,7 @@ package log
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync/atomic"
 )
@@ -215,4 +216,41 @@ func normalizeArgs(args []any) []any {
 		}
 	}
 	return out
+}
+
+// isInternalFrame reports whether a stack frame belongs to the Go runtime,
+// testing infrastructure, or the core/log package (excluding test files).
+func isInternalFrame(frame runtime.Frame) bool {
+	if strings.Contains(frame.Function, "runtime.") {
+		return true
+	}
+	if strings.HasPrefix(frame.Function, "testing.") {
+		return true
+	}
+	if strings.Contains(frame.File, "/core/log/") && !strings.HasSuffix(frame.File, "_test.go") {
+		return true
+	}
+	return false
+}
+
+// findCaller walks the call stack starting from skip, returning the first frame
+// outside internal packages (runtime, testing, core/log) — i.e., user code.
+func findCaller(skip int) (file string, line int, ok bool) {
+	const maxDepth = 30
+	pcs := make([]uintptr, maxDepth)
+	n := runtime.Callers(skip, pcs)
+	if n == 0 {
+		return "", 0, false
+	}
+	frames := runtime.CallersFrames(pcs[:n])
+	for {
+		frame, more := frames.Next()
+		if !isInternalFrame(frame) {
+			return frame.File, frame.Line, true
+		}
+		if !more {
+			break
+		}
+	}
+	return "", 0, false
 }
