@@ -55,7 +55,7 @@ server:
   port: 8080`
 	path := writeTestYAML(t, yamlContent)
 
-	t.Setenv("SERVER_PORT", "9090")
+	t.Setenv("SERVER__PORT", "9090")
 
 	cfg, err := NewKoanf(WithFile(path))
 	if err != nil {
@@ -137,7 +137,7 @@ app:
 }
 
 func TestNewKoanfNoFile(t *testing.T) {
-	t.Setenv("APP_NAME", "test")
+	t.Setenv("APP__NAME", "test")
 
 	cfg, err := NewKoanf()
 	if err != nil {
@@ -158,7 +158,7 @@ func TestNewKoanfFileNotFound(t *testing.T) {
 
 func TestEnvFileLoaded(t *testing.T) {
 	dir := t.TempDir()
-	writeTestEnv(t, dir, "APP_NAME=fromenvfile")
+	writeTestEnv(t, dir, "APP__NAME=fromenvfile")
 
 	// .env is loaded from cwd, so we must chdir
 	old, err := os.Getwd()
@@ -197,7 +197,7 @@ func TestEnvFileSkippedWhenMissing(t *testing.T) {
 
 func TestEnvVarOverridesEnvFile(t *testing.T) {
 	dir := t.TempDir()
-	writeTestEnv(t, dir, "SERVER_PORT=3000")
+	writeTestEnv(t, dir, "SERVER__PORT=3000")
 
 	old, err := os.Getwd()
 	if err != nil {
@@ -206,7 +206,7 @@ func TestEnvVarOverridesEnvFile(t *testing.T) {
 	t.Chdir(dir)
 	defer os.Chdir(old)
 
-	t.Setenv("SERVER_PORT", "9090")
+	t.Setenv("SERVER__PORT", "9090")
 
 	cfg, err := NewKoanf()
 	if err != nil {
@@ -225,7 +225,7 @@ func TestEnvFileOverridesYAML(t *testing.T) {
 	if err := os.WriteFile(yamlPath, []byte(yamlContent), 0600); err != nil {
 		t.Fatal(err)
 	}
-	writeTestEnv(t, dir, "SERVER_PORT=3000")
+	writeTestEnv(t, dir, "SERVER__PORT=3000")
 
 	old, err := os.Getwd()
 	if err != nil {
@@ -241,5 +241,79 @@ func TestEnvFileOverridesYAML(t *testing.T) {
 
 	if cfg.Int("server.port") != 3000 {
 		t.Errorf("expected 3000 (from .env), got %d", cfg.Int("server.port"))
+	}
+}
+
+func TestNestedSnakeCaseEnvOverride(t *testing.T) {
+	yamlContent := `
+sms:
+  access_key_id: old_key
+  pool:
+    max_size: 5`
+	path := writeTestYAML(t, yamlContent)
+
+	t.Setenv("SMS__ACCESS_KEY_ID", "new_key")
+
+	cfg, err := NewKoanf(WithFile(path))
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.String("sms.access_key_id") != "new_key" {
+		t.Errorf("expected new_key, got %s", cfg.String("sms.access_key_id"))
+	}
+	// Pool section without env override should keep YAML value
+	if cfg.Int("sms.pool.max_size") != 5 {
+		t.Errorf("expected 5, got %d", cfg.Int("sms.pool.max_size"))
+	}
+}
+
+func TestDoubleUnderscoreNesting(t *testing.T) {
+	t.Setenv("SMS__POOL__MAX_SIZE", "10")
+
+	cfg, err := NewKoanf()
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.Int("sms.pool.max_size") != 10 {
+		t.Errorf("expected 10, got %d", cfg.Int("sms.pool.max_size"))
+	}
+}
+
+func TestWithEnvPrefixFiltersVars(t *testing.T) {
+	yamlContent := `
+server:
+  port: 8080`
+	path := writeTestYAML(t, yamlContent)
+
+	t.Setenv("MYAPP_SERVER__PORT", "9090")
+	// Non-prefixed var should be ignored
+	t.Setenv("SERVER__PORT", "3000")
+
+	cfg, err := NewKoanf(WithFile(path), WithEnvPrefix("MYAPP_"))
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.Int("server.port") != 9090 {
+		t.Errorf("expected 9090 (from MYAPP_ prefix), got %d", cfg.Int("server.port"))
+	}
+}
+
+func TestWithEnvPrefixStripsPrefix(t *testing.T) {
+	t.Setenv("QUIX_SERVER__PORT", "8080")
+	t.Setenv("QUIX_APP__NAME", "myapp")
+
+	cfg, err := NewKoanf(WithEnvPrefix("QUIX_"))
+	if err != nil {
+		t.Fatalf("NewKoanf failed: %v", err)
+	}
+
+	if cfg.Int("server.port") != 8080 {
+		t.Errorf("expected 8080, got %d", cfg.Int("server.port"))
+	}
+	if cfg.String("app.name") != "myapp" {
+		t.Errorf("expected myapp, got %s", cfg.String("app.name"))
 	}
 }

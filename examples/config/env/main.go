@@ -10,9 +10,10 @@ import (
 
 func main() {
 	// 模拟设置环境变量（生产环境中由系统设置）
-	os.Setenv("SERVER_PORT", "3000")
-	os.Setenv("APP_NAME", "production-app")
-	os.Setenv("APP_DEBUG", "false")
+	// 使用双下划线 __ 作为嵌套分隔符，单下划线 _ 保持 snake_case
+	os.Setenv("SERVER__PORT", "3000")
+	os.Setenv("APP__NAME", "production-app")
+	os.Setenv("APP__DEBUG", "false")
 
 	// 不加载文件，纯环境变量
 	cfg, err := config.NewKoanf()

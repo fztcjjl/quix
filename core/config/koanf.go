@@ -7,14 +7,16 @@ import (
 	"github.com/knadh/koanf/parsers/dotenv"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/confmap"
-	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/env/v2"
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/v2"
 )
 
-// normalizeEnvKey converts SERVER_PORT to server.port, matching the env provider convention.
+// normalizeEnvKey converts SERVER__PORT to server.port, using __ as the nesting delimiter.
+// Single underscores are preserved for snake_case keys (e.g., SMS__ACCESS_KEY_ID → sms.access_key_id).
+// This follows the ASP.NET Core / Docker Compose convention.
 func normalizeEnvKey(s string) string {
-	return strings.ReplaceAll(strings.ToLower(s), "_", ".")
+	return strings.ReplaceAll(strings.ToLower(s), "__", ".")
 }
 
 type koanfConfig struct {
@@ -25,13 +27,25 @@ type koanfConfig struct {
 type Option func(*options)
 
 type options struct {
-	filePath string
+	filePath  string
+	envPrefix string
 }
 
 // WithFile sets the YAML configuration file path.
 func WithFile(path string) Option {
 	return func(o *options) {
 		o.filePath = path
+	}
+}
+
+// WithEnvPrefix sets the environment variable prefix. Only environment variables
+// matching this prefix will be loaded. The prefix should include a trailing underscore
+// (e.g., "QUIX_"), which acts as the boundary between the prefix and the config path.
+// The __ nesting separator is used within the config path only.
+// For example, WithEnvPrefix("QUIX_") maps QUIX_SMS__ACCESS_KEY_ID to sms.access_key_id.
+func WithEnvPrefix(prefix string) Option {
+	return func(o *options) {
+		o.envPrefix = prefix
 	}
 }
 
@@ -66,6 +80,12 @@ func NewKoanf(opts ...Option) (Config, error) {
 		}
 		normalized := make(map[string]any, len(parsed))
 		for key, val := range parsed {
+			if o.envPrefix != "" {
+				if !strings.HasPrefix(key, o.envPrefix) {
+					continue
+				}
+				key = strings.TrimPrefix(key, o.envPrefix)
+			}
 			normalized[normalizeEnvKey(key)] = val
 		}
 		if err := k.Load(confmap.Provider(normalized, "."), nil); err != nil {
@@ -74,7 +94,15 @@ func NewKoanf(opts ...Option) (Config, error) {
 	}
 
 	// Load env (higher priority)
-	if err := k.Load(env.Provider("", ".", normalizeEnvKey), nil); err != nil {
+	if err := k.Load(env.Provider(".", env.Opt{
+		Prefix: o.envPrefix,
+		TransformFunc: func(k, v string) (string, any) {
+			if o.envPrefix != "" {
+				k = strings.TrimPrefix(k, o.envPrefix)
+			}
+			return normalizeEnvKey(k), v
+		},
+	}), nil); err != nil {
 		return nil, err
 	}
 
