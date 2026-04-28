@@ -6,14 +6,14 @@ package testdata
 import qerrors "github.com/fztcjjl/quix/core/errors"
 
 const (
-	UserErrorInvalidInputCode     = "user error invalid input"
-	UserErrorPermissionDeniedCode = "user error permission denied"
-	UserErrorNotFoundCode         = "user error not found"
-	UserErrorAlreadyExistsCode    = "user error already exists"
-	UserErrorUnspecifiedCode      = "user error unspecified"
+	UserErrorInvalidInputCode     = "USER_ERROR_INVALID_INPUT"
+	UserErrorPermissionDeniedCode = "USER_ERROR_PERMISSION_DENIED"
+	UserErrorNotFoundCode         = "USER_ERROR_NOT_FOUND"
+	UserErrorAlreadyExistsCode    = "USER_ERROR_ALREADY_EXISTS"
+	UserErrorUnspecifiedCode      = "USER_ERROR_UNSPECIFIED"
 )
 
-// UserInvalidInput returns an Error with code "user error invalid input", message "参数验证失败", HTTP status 400.
+// UserInvalidInput returns an Error with code "USER_ERROR_INVALID_INPUT", message "参数验证失败", HTTP status 400.
 func UserInvalidInput() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorInvalidInputCode,
@@ -22,7 +22,7 @@ func UserInvalidInput() *qerrors.Error {
 	}
 }
 
-// UserInvalidInputWithDetails returns an Error with code "user error invalid input", message "参数验证失败", HTTP status 400, and the given details.
+// UserInvalidInputWithDetails returns an Error with code "USER_ERROR_INVALID_INPUT", message "参数验证失败", HTTP status 400, and the given details.
 func UserInvalidInputWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorInvalidInputCode,
@@ -32,7 +32,7 @@ func UserInvalidInputWithDetails(details any) *qerrors.Error {
 	}
 }
 
-// UserPermissionDenied returns an Error with code "user error permission denied", message "没有权限", HTTP status 403.
+// UserPermissionDenied returns an Error with code "USER_ERROR_PERMISSION_DENIED", message "没有权限", HTTP status 403.
 func UserPermissionDenied() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorPermissionDeniedCode,
@@ -41,7 +41,7 @@ func UserPermissionDenied() *qerrors.Error {
 	}
 }
 
-// UserPermissionDeniedWithDetails returns an Error with code "user error permission denied", message "没有权限", HTTP status 403, and the given details.
+// UserPermissionDeniedWithDetails returns an Error with code "USER_ERROR_PERMISSION_DENIED", message "没有权限", HTTP status 403, and the given details.
 func UserPermissionDeniedWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorPermissionDeniedCode,
@@ -51,7 +51,7 @@ func UserPermissionDeniedWithDetails(details any) *qerrors.Error {
 	}
 }
 
-// UserNotFound returns an Error with code "user error not found", message "用户不存在", HTTP status 404.
+// UserNotFound returns an Error with code "USER_ERROR_NOT_FOUND", message "用户不存在", HTTP status 404.
 func UserNotFound() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorNotFoundCode,
@@ -60,7 +60,7 @@ func UserNotFound() *qerrors.Error {
 	}
 }
 
-// UserNotFoundWithDetails returns an Error with code "user error not found", message "用户不存在", HTTP status 404, and the given details.
+// UserNotFoundWithDetails returns an Error with code "USER_ERROR_NOT_FOUND", message "用户不存在", HTTP status 404, and the given details.
 func UserNotFoundWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorNotFoundCode,
@@ -70,7 +70,7 @@ func UserNotFoundWithDetails(details any) *qerrors.Error {
 	}
 }
 
-// UserAlreadyExists returns an Error with code "user error already exists", message "用户已存在", HTTP status 409.
+// UserAlreadyExists returns an Error with code "USER_ERROR_ALREADY_EXISTS", message "用户已存在", HTTP status 409.
 func UserAlreadyExists() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorAlreadyExistsCode,
@@ -79,7 +79,7 @@ func UserAlreadyExists() *qerrors.Error {
 	}
 }
 
-// UserAlreadyExistsWithDetails returns an Error with code "user error already exists", message "用户已存在", HTTP status 409, and the given details.
+// UserAlreadyExistsWithDetails returns an Error with code "USER_ERROR_ALREADY_EXISTS", message "用户已存在", HTTP status 409, and the given details.
 func UserAlreadyExistsWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       UserErrorAlreadyExistsCode,

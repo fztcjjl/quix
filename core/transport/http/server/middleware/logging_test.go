@@ -357,14 +357,20 @@ func TestLoggingWithHook(t *testing.T) {
 	log.SetDefault(cap)
 
 	var hookCalled bool
-	var hookFields map[string]any
 
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.Use(AccessLog(WithHook(func(c *gin.Context, fields map[string]any) {
+	r.Use(AccessLog(WithHook(func(c *gin.Context, args *[]any) {
 		hookCalled = true
-		hookFields = fields
-		fields["custom_key"] = "custom_val"
+		// Verify existing fields are accessible
+		for i := 0; i+1 < len(*args); i += 2 {
+			if (*args)[i].(string) == "method" {
+				if (*args)[i+1] != "GET" {
+					t.Errorf("hook args method = %v, want GET", (*args)[i+1])
+				}
+			}
+		}
+		*args = append(*args, "custom_key", "custom_val")
 	})))
 	r.GET("/ok", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
 
@@ -374,12 +380,6 @@ func TestLoggingWithHook(t *testing.T) {
 
 	if !hookCalled {
 		t.Fatal("hook was not called")
-	}
-	if hookFields == nil {
-		t.Fatal("hook received nil fields")
-	}
-	if hookFields["method"] != "GET" {
-		t.Errorf("hook fields method = %v, want GET", hookFields["method"])
 	}
 
 	// Custom field should appear in the log output

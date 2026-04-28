@@ -14,8 +14,9 @@ import (
 )
 
 // AccessLogHookFunc is called after each request with the collected log fields.
-// It can be used to add custom fields or perform side effects.
-type AccessLogHookFunc func(c *gin.Context, fields map[string]any)
+// It receives a pointer to the key-value args slice, allowing direct append
+// without intermediate map allocations.
+type AccessLogHookFunc func(c *gin.Context, args *[]any)
 
 // accessLogConfig holds configuration for the access log middleware.
 type accessLogConfig struct {
@@ -120,7 +121,12 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 			ct := c.ContentType()
 			if isLoggableContentType(ct) {
 				var buf bytes.Buffer
-				reqBody, _ = io.ReadAll(io.TeeReader(c.Request.Body, &buf))
+				var err error
+				reqBody, err = io.ReadAll(io.TeeReader(c.Request.Body, &buf))
+				if err != nil {
+					log.Debug(c.Request.Context(), "failed to read request body for logging", "error", err)
+					reqBody = nil
+				}
 				c.Request.Body = io.NopCloser(&buf)
 			}
 		}
@@ -195,10 +201,7 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 		}
 
 		if cfg.hook != nil {
-			// Build a map from args for the hook, then rebuild args with any additions.
-			fields := sliceToMap(args)
-			cfg.hook(c, fields)
-			args = mapToSlice(fields)
+			cfg.hook(c, &args)
 		}
 
 		switch {
@@ -222,35 +225,10 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 	}
 }
 
-// sliceToMap converts a flat key-value slice to a map.
-func sliceToMap(args []any) map[string]any {
-	m := make(map[string]any, len(args)/2)
-	for i := 0; i+1 < len(args); i += 2 {
-		if k, ok := args[i].(string); ok {
-			m[k] = args[i+1]
-		}
-	}
-	return m
-}
-
-// mapToSlice converts a map to a flat key-value slice.
-func mapToSlice(m map[string]any) []any {
-	args := make([]any, 0, len(m)*2)
-	for k, v := range m {
-		args = append(args, k, v)
-	}
-	return args
-}
-
-// RequestLoggerOption configures the WithRequestLogger middleware.
-type RequestLoggerOption func(*requestLoggerConfig)
-
-type requestLoggerConfig struct{}
-
 // WithRequestLogger returns a middleware that creates a request-scoped Logger
 // enriched with trace_id, span_id, and request_id, and stores it in the context.
 // Downstream handlers can retrieve it via log.FromContext(ctx).
-func WithRequestLogger(opts ...RequestLoggerOption) gin.HandlerFunc {
+func WithRequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		base := log.FromContext(c.Request.Context())
 

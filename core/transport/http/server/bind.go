@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/gin-gonic/gin"
 	"github.com/go-playground/form/v4"
 )
 
@@ -25,14 +26,19 @@ func getFormDecoder() *form.Decoder {
 	return decoder
 }
 
+// uriParamsToMap converts gin path parameters to a map[string][]string for form decoding.
+func uriParamsToMap(params gin.Params) map[string][]string {
+	values := make(map[string][]string, len(params))
+	for _, p := range params {
+		values[p.Key] = []string{p.Value}
+	}
+	return values
+}
+
 // ShouldBindUri decodes path parameters into req using the form decoder.
 // This works with proto-generated structs that have json tags.
 func (c *Context) ShouldBindUri(req any) error {
-	values := make(map[string][]string)
-	for _, p := range c.Params {
-		values[p.Key] = []string{p.Value}
-	}
-	return getFormDecoder().Decode(req, values)
+	return getFormDecoder().Decode(req, uriParamsToMap(c.Params))
 }
 
 // ShouldBindQuery decodes URL query parameters into req using the form decoder.
@@ -78,11 +84,7 @@ func (c *Context) ShouldBindUriConflictCheck(req any, pathVars []string) error {
 	}
 
 	// No conflicts — bind URI values (overwrites matching or zero-value fields)
-	values := make(map[string][]string)
-	for _, p := range c.Params {
-		values[p.Key] = []string{p.Value}
-	}
-	return getFormDecoder().Decode(req, values)
+	return getFormDecoder().Decode(req, uriParamsToMap(c.Params))
 }
 
 // findFieldByJSONTag returns the field index for the struct field whose json tag

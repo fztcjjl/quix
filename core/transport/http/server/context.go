@@ -13,7 +13,7 @@ type Context struct {
 // SetError stores an error in the gin context.
 // The error will be picked up by ResponseMiddleware to format the response.
 func (c *Context) SetError(err error) {
-	c.Set("app_error", err)
+	SetAppError(c.Context, err)
 }
 
 // GetError retrieves the stored error from the gin context.
@@ -29,4 +29,5 @@ func (c *Context) GetError() error {
 
 func SetAppError(c *gin.Context, err error) {
 	c.Set("app_error", err)
+	c.Abort()
 }

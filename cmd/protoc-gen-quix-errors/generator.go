@@ -89,7 +89,7 @@ func extractEnumValues(enum *protogen.Enum) []EnumValueData {
 			ConstName:     toPascalCase(valueName) + "Code",
 			FuncName:      funcName,
 			FuncNameWD:    funcName + "WithDetails",
-			Code:          toLowerSpace(valueName),
+			Code:          valueName,
 			Message:       message,
 			HTTPStatus:    int(httpStatus),
 			IsUnspecified: val.Desc.Number() == 0,

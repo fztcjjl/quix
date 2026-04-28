@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	qerrors "github.com/fztcjjl/quix/core/errors"
+	"github.com/fztcjjl/quix/core/log"
 	"github.com/gin-gonic/gin"
 )
 
@@ -45,6 +46,8 @@ func ResponseMiddleware(opts ...ResponseOption) gin.HandlerFunc {
 
 		appErr, ok := qerrors.ResolveAppError(raw)
 		if !ok {
+			log.Warn(c.Request.Context(), "unresolvable app_error in context, returning 500", "value", raw)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": gin.H{"code": "internal_error", "message": "Internal Server Error"}})
 			return
 		}
 

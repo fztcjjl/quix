@@ -6,13 +6,13 @@ package errors
 import qerrors "github.com/fztcjjl/quix/core/errors"
 
 const (
-	ErrorTaskTitleRequiredCode = "error task title required"
-	ErrorTaskNotFoundCode      = "error task not found"
-	ErrorTaskAlreadyDoneCode   = "error task already done"
-	ErrorTaskUnspecifiedCode   = "error task unspecified"
+	ErrorTaskTitleRequiredCode = "ERROR_TASK_TITLE_REQUIRED"
+	ErrorTaskNotFoundCode      = "ERROR_TASK_NOT_FOUND"
+	ErrorTaskAlreadyDoneCode   = "ERROR_TASK_ALREADY_DONE"
+	ErrorTaskUnspecifiedCode   = "ERROR_TASK_UNSPECIFIED"
 )
 
-// TaskTitleRequired returns an Error with code "error task title required", message "任务标题不能为空", HTTP status 400.
+// TaskTitleRequired returns an Error with code "ERROR_TASK_TITLE_REQUIRED", message "任务标题不能为空", HTTP status 400.
 func TaskTitleRequired() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskTitleRequiredCode,
@@ -21,7 +21,7 @@ func TaskTitleRequired() *qerrors.Error {
 	}
 }
 
-// TaskTitleRequiredWithDetails returns an Error with code "error task title required", message "任务标题不能为空", HTTP status 400, and the given details.
+// TaskTitleRequiredWithDetails returns an Error with code "ERROR_TASK_TITLE_REQUIRED", message "任务标题不能为空", HTTP status 400, and the given details.
 func TaskTitleRequiredWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskTitleRequiredCode,
@@ -31,7 +31,7 @@ func TaskTitleRequiredWithDetails(details any) *qerrors.Error {
 	}
 }
 
-// TaskNotFound returns an Error with code "error task not found", message "任务不存在", HTTP status 404.
+// TaskNotFound returns an Error with code "ERROR_TASK_NOT_FOUND", message "任务不存在", HTTP status 404.
 func TaskNotFound() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskNotFoundCode,
@@ -40,7 +40,7 @@ func TaskNotFound() *qerrors.Error {
 	}
 }
 
-// TaskNotFoundWithDetails returns an Error with code "error task not found", message "任务不存在", HTTP status 404, and the given details.
+// TaskNotFoundWithDetails returns an Error with code "ERROR_TASK_NOT_FOUND", message "任务不存在", HTTP status 404, and the given details.
 func TaskNotFoundWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskNotFoundCode,
@@ -50,7 +50,7 @@ func TaskNotFoundWithDetails(details any) *qerrors.Error {
 	}
 }
 
-// TaskAlreadyDone returns an Error with code "error task already done", message "任务已完成", HTTP status 409.
+// TaskAlreadyDone returns an Error with code "ERROR_TASK_ALREADY_DONE", message "任务已完成", HTTP status 409.
 func TaskAlreadyDone() *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskAlreadyDoneCode,
@@ -59,7 +59,7 @@ func TaskAlreadyDone() *qerrors.Error {
 	}
 }
 
-// TaskAlreadyDoneWithDetails returns an Error with code "error task already done", message "任务已完成", HTTP status 409, and the given details.
+// TaskAlreadyDoneWithDetails returns an Error with code "ERROR_TASK_ALREADY_DONE", message "任务已完成", HTTP status 409, and the given details.
 func TaskAlreadyDoneWithDetails(details any) *qerrors.Error {
 	return &qerrors.Error{
 		Code:       ErrorTaskAlreadyDoneCode,
