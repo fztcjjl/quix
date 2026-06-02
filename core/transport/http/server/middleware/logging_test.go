@@ -293,7 +293,7 @@ func TestIsSkipped(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isSkipped(tt.path, tt.skipPaths)
+			got := isSkipped(tt.path, compileSkipPaths(tt.skipPaths))
 			if got != tt.want {
 				t.Errorf("isSkipped(%q, %v) = %v, want %v", tt.path, tt.skipPaths, got, tt.want)
 			}

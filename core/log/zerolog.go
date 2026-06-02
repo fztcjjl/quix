@@ -94,6 +94,35 @@ func (z *zerologLogger) Fatal(ctx context.Context, msg string, args ...any) {
 
 func (z *zerologLogger) With(args ...any) Logger {
 	normalized := normalizeArgs(args)
+	// Fast path: small field count avoids map allocation by using typed zerolog methods.
+	if len(normalized) <= 6 {
+		w := z.l.With()
+		for i := 0; i+1 < len(normalized); i += 2 {
+			key, ok := normalized[i].(string)
+			if !ok {
+				continue
+			}
+			switch v := normalized[i+1].(type) {
+			case string:
+				w = w.Str(key, v)
+			case error:
+				w = w.AnErr(key, v)
+			case int:
+				w = w.Int(key, v)
+			case int64:
+				w = w.Int64(key, v)
+			case float64:
+				w = w.Float64(key, v)
+			case bool:
+				w = w.Bool(key, v)
+			case time.Duration:
+				w = w.Dur(key, v)
+			default:
+				w = w.Interface(key, v)
+			}
+		}
+		return &zerologLogger{al: z.al, l: w.Logger(), callerEnabled: z.callerEnabled}
+	}
 	m := make(map[string]any, len(normalized)/2)
 	for i := 0; i+1 < len(normalized); i += 2 {
 		m[normalized[i].(string)] = normalized[i+1]

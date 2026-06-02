@@ -79,6 +79,7 @@ type App struct {
 	rpcServer         transport.Server
 	telemetryShutdown func(context.Context) error
 	telCfg            *telemetry.Config
+	httpAddr          string
 }
 
 // resolveHttpAddr reads the HTTP server address from config.
@@ -154,7 +155,8 @@ func New(opts ...Option) *App {
 
 	if app.httpServer == nil && (hasHttpConfig || !hasRpcConfig) {
 		var serverOpts []qhttp.Option
-		serverOpts = append(serverOpts, qhttp.WithAddr(resolveHttpAddr(app.config)))
+		app.httpAddr = resolveHttpAddr(app.config)
+		serverOpts = append(serverOpts, qhttp.WithAddr(app.httpAddr))
 		serverOpts = append(serverOpts, qhttp.WithCORS(app.corsEnabled))
 		if app.corsConfig != nil {
 			serverOpts = append(serverOpts, qhttp.WithCORSConfig(*app.corsConfig))
@@ -201,7 +203,7 @@ func (a *App) Run() {
 		telemetryStatus = "enabled"
 	}
 	log.Info(context.Background(), "starting server",
-		"addr", resolveHttpAddr(a.config),
+		"addr", a.httpAddr,
 		"env", string(a.env),
 		"gin_mode", gin.Mode(),
 		"telemetry", telemetryStatus)

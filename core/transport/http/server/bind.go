@@ -68,7 +68,7 @@ func (c *Context) ShouldBindUriConflictCheck(req any, pathVars []string) error {
 	}
 
 	for _, p := range c.Params {
-		fieldIdx := findFieldByJSONTag(rv.Type(), p.Key)
+		fieldIdx := findFieldByJSONTagCached(rv.Type(), p.Key)
 		if fieldIdx == nil {
 			continue
 		}
@@ -85,6 +85,25 @@ func (c *Context) ShouldBindUriConflictCheck(req any, pathVars []string) error {
 
 	// No conflicts — bind URI values (overwrites matching or zero-value fields)
 	return getFormDecoder().Decode(req, uriParamsToMap(c.Params))
+}
+
+// fieldIndexCache caches findFieldByJSONTag results to avoid repeated reflection
+// for the same (type, tag name) pair across requests.
+var fieldIndexCache sync.Map
+
+// findFieldByJSONTagCached returns the cached field index for the struct field
+// whose json tag matches the given name. Results are cached to avoid repeated
+// reflection for the same type across requests.
+func findFieldByJSONTagCached(typ reflect.Type, name string) []int {
+	key := [2]any{typ, name}
+	if v, ok := fieldIndexCache.Load(key); ok {
+		return v.([]int)
+	}
+	idx := findFieldByJSONTag(typ, name)
+	if idx != nil {
+		fieldIndexCache.Store(key, idx)
+	}
+	return idx
 }
 
 // findFieldByJSONTag returns the field index for the struct field whose json tag

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/fztcjjl/quix/core/errors"
@@ -20,10 +21,16 @@ type AccessLogHookFunc func(c *gin.Context, args *[]any)
 
 // accessLogConfig holds configuration for the access log middleware.
 type accessLogConfig struct {
-	skipPaths     []string
+	skipPaths     []skipRule
 	hook          AccessLogHookFunc
 	slowThreshold time.Duration
 	bodyLogMax    int
+}
+
+// skipRule is a pre-compiled path matching rule.
+type skipRule struct {
+	exact  string // empty means not an exact match
+	prefix string // non-empty means prefix match
 }
 
 // AccessLogOption configures the AccessLog middleware.
@@ -32,7 +39,7 @@ type AccessLogOption func(*accessLogConfig)
 // WithSkipPaths sets paths to skip logging. Paths ending with "/" use prefix matching.
 func WithSkipPaths(paths ...string) AccessLogOption {
 	return func(cfg *accessLogConfig) {
-		cfg.skipPaths = paths
+		cfg.skipPaths = compileSkipPaths(paths)
 	}
 }
 
@@ -61,18 +68,28 @@ func WithBodyLog(maxBytes int) AccessLogOption {
 	}
 }
 
-// isSkipped checks if a path should be skipped.
-// Paths ending with "/" match any path with that prefix.
-func isSkipped(path string, skipPaths []string) bool {
-	for _, p := range skipPaths {
+// compileSkipPaths pre-compiles path patterns into skip rules.
+func compileSkipPaths(paths []string) []skipRule {
+	rules := make([]skipRule, 0, len(paths))
+	for _, p := range paths {
 		if strings.HasSuffix(p, "/") {
-			if strings.HasPrefix(path, p) {
-				return true
-			}
+			rules = append(rules, skipRule{prefix: p})
 		} else {
-			if path == p {
+			rules = append(rules, skipRule{exact: p})
+		}
+	}
+	return rules
+}
+
+// isSkipped checks if a path should be skipped using pre-compiled rules.
+func isSkipped(path string, rules []skipRule) bool {
+	for _, r := range rules {
+		if r.prefix != "" {
+			if strings.HasPrefix(path, r.prefix) {
 				return true
 			}
+		} else if path == r.exact {
+			return true
 		}
 	}
 	return false
@@ -104,12 +121,24 @@ func truncateBody(b []byte, max int) ([]byte, bool) {
 	return b[:max], true
 }
 
+// Pools for access log middleware to reduce per-request allocations.
+var (
+	argsPool = sync.Pool{
+		New: func() any { return make([]any, 0, 24) },
+	}
+	bodyBufPool = sync.Pool{
+		New: func() any { return new(bytes.Buffer) },
+	}
+)
+
 // AccessLog returns a middleware that logs each HTTP request with structured fields.
 func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 	var cfg accessLogConfig
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+
+	slowThresholdMs := float64(cfg.slowThreshold) / float64(time.Millisecond)
 
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -120,14 +149,17 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 		if cfg.bodyLogMax > 0 {
 			ct := c.ContentType()
 			if isLoggableContentType(ct) {
-				var buf bytes.Buffer
+				buf := bodyBufPool.Get().(*bytes.Buffer)
+				buf.Reset()
 				var err error
-				reqBody, err = io.ReadAll(io.TeeReader(c.Request.Body, &buf))
+				reqBody, err = io.ReadAll(io.TeeReader(c.Request.Body, buf))
 				if err != nil {
 					log.Debug(c.Request.Context(), "failed to read request body for logging", "error", err)
 					reqBody = nil
 				}
-				c.Request.Body = io.NopCloser(&buf)
+				c.Request.Body = io.NopCloser(buf)
+				// Return buffer to pool after handler finishes.
+				defer bodyBufPool.Put(buf)
 			}
 		}
 
@@ -138,22 +170,27 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 		}
 
 		latency := time.Since(start)
+		latencyMs := float64(latency) / float64(time.Millisecond)
 		status := c.Writer.Status()
 		reqID, _ := c.Get("X-Request-Id")
 		clientIP := c.ClientIP()
 		ct := c.ContentType()
 
-		// Build log args directly as a slice (avoids intermediate map allocation).
-		args := []any{
+		// Build log args from pool (avoids repeated slice growth).
+		args := argsPool.Get().([]any)
+		args = args[:0]
+		defer argsPool.Put(args)
+
+		args = append(args,
 			"method", c.Request.Method,
 			"path", path,
 			"status", status,
 			"latency", latency.String(),
-			"latency_ms", float64(latency) / float64(time.Millisecond),
+			"latency_ms", latencyMs,
 			"client_ip", clientIP,
 			"request_size", c.Request.ContentLength,
 			"response_size", c.Writer.Size(),
-		}
+		)
 		if ct != "" {
 			args = append(args, "content_type", ct)
 		}
@@ -162,11 +199,11 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 		}
 
 		ctx := c.Request.Context()
-		if traceID := telemetry.ExtractTraceID(ctx); traceID != "" {
+		if traceID, spanID := telemetry.ExtractTraceAndSpanID(ctx); traceID != "" {
 			args = append(args, "trace_id", traceID)
-		}
-		if spanID := telemetry.ExtractSpanID(ctx); spanID != "" {
-			args = append(args, "span_id", spanID)
+			if spanID != "" {
+				args = append(args, "span_id", spanID)
+			}
 		}
 
 		if query := c.Request.URL.RawQuery; query != "" {
@@ -215,12 +252,11 @@ func AccessLog(opts ...AccessLogOption) gin.HandlerFunc {
 
 		// Slow request detection.
 		if cfg.slowThreshold > 0 && latency > cfg.slowThreshold {
-			slowArgs := []any{
+			log.Warn(ctx, "slow request",
 				"path", path,
-				"latency_ms", float64(latency) / float64(time.Millisecond),
-				"threshold_ms", float64(cfg.slowThreshold) / float64(time.Millisecond),
-			}
-			log.Warn(ctx, "slow request", slowArgs...)
+				"latency_ms", latencyMs,
+				"threshold_ms", slowThresholdMs,
+			)
 		}
 	}
 }
@@ -241,14 +277,12 @@ func WithRequestLogger() gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
-		// Extract trace_id.
-		if traceID := telemetry.ExtractTraceID(ctx); traceID != "" {
+		// Extract trace_id and span_id in a single call.
+		if traceID, spanID := telemetry.ExtractTraceAndSpanID(ctx); traceID != "" {
 			fields = append(fields, "trace_id", traceID)
-		}
-
-		// Extract span_id.
-		if spanID := telemetry.ExtractSpanID(ctx); spanID != "" {
-			fields = append(fields, "span_id", spanID)
+			if spanID != "" {
+				fields = append(fields, "span_id", spanID)
+			}
 		}
 
 		child := base.With(fields...)

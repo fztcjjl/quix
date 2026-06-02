@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -233,11 +234,20 @@ func isInternalFrame(frame runtime.Frame) bool {
 	return false
 }
 
+// pcsPool reduces per-call allocations in findCaller by reusing the uintptr slice.
+var pcsPool = sync.Pool{
+	New: func() any {
+		pcs := make([]uintptr, 30)
+		return &pcs
+	},
+}
+
 // findCaller walks the call stack starting from skip, returning the first frame
 // outside internal packages (runtime, testing, core/log) — i.e., user code.
 func findCaller(skip int) (file string, line int, ok bool) {
-	const maxDepth = 30
-	pcs := make([]uintptr, maxDepth)
+	pcsPtr := pcsPool.Get().(*[]uintptr)
+	defer pcsPool.Put(pcsPtr)
+	pcs := (*pcsPtr)[:30]
 	n := runtime.Callers(skip, pcs)
 	if n == 0 {
 		return "", 0, false
