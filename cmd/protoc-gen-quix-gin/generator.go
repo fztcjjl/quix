@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -48,8 +49,8 @@ func generateFile(plugin *protogen.Plugin, file *protogen.File) {
 				// Same package — just use the type name
 				outputType = "*" + outputIdent.GoName
 			default:
-				// Different package — need full qualified name
-				outputType = "*" + outputIdent.GoName
+				// Different package — need package-qualified name
+				outputType = "*" + filepath.Base(outputPkg) + "." + outputIdent.GoName
 				extraImports[outputPkg] = true
 			}
 
